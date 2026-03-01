@@ -1,0 +1,22 @@
+package me.veselin.probity.marketdata.repository;
+
+import me.veselin.probity.marketdata.domain.PriceBar;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface PriceBarRepository extends JpaRepository<PriceBar, UUID> {
+
+    List<PriceBar> findBySymbolOrderByBarDateAsc(String symbol);
+
+    List<PriceBar> findBySymbolAndBarDateBetweenOrderByBarDateAsc(
+            String symbol, LocalDate from, LocalDate to
+    );
+
+    Optional<PriceBar> findTopBySymbolOrderByBarDateDesc(String symbol);
+}
