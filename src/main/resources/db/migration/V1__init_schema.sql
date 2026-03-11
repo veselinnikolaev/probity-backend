@@ -13,22 +13,22 @@ CREATE TYPE asset_type AS ENUM ('STOCK', 'ETF', 'CRYPTO');
 
 CREATE TABLE users
 (
-    id           UUID PRIMARY KEY,
-    email        VARCHAR(255) NOT NULL,
-    password     VARCHAR(255) NOT NULL,
-    display_name VARCHAR(100),
-    role         user_role    NOT NULL DEFAULT 'USER',
+    id         UUID PRIMARY KEY,
+    email      VARCHAR(255) NOT NULL,
+    password   VARCHAR(255) NOT NULL,
+    username   VARCHAR(100),
+    role       user_role    NOT NULL DEFAULT 'USER',
 
     -- Audit
-    created_at   TIMESTAMP    NOT NULL,
-    updated_at   TIMESTAMP,
+    created_at TIMESTAMP    NOT NULL,
+    updated_at TIMESTAMP,
 
     -- Soft-delete
-    deleted      BOOLEAN      NOT NULL DEFAULT FALSE,
-    deleted_at   TIMESTAMP,
+    deleted    BOOLEAN      NOT NULL DEFAULT FALSE,
+    deleted_at TIMESTAMP,
 
     -- Optimistic locking
-    version      BIGINT       NOT NULL DEFAULT 0,
+    version    BIGINT       NOT NULL DEFAULT 0,
 
     CONSTRAINT uq_users_email UNIQUE (email)
 );

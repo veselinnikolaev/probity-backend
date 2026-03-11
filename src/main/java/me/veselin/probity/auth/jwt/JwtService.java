@@ -4,11 +4,11 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -27,16 +27,15 @@ public class JwtService {
         this.issuer = issuer;
     }
 
-    public String generateJwt(UserDetails userDetails) {
+    public String generateJwt(String subject, Map<String, Object> claims) {
         long now = System.currentTimeMillis();
         long expiry = now + expirationTime * 1000;
 
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .issuer(issuer)
-                .subject(userDetails.getUsername())
-                .claim(
-                        "roles", userDetails.getAuthorities())
+                .subject(subject)
+                .claims(claims)
                 .issuedAt(new Date(now))
                 .expiration(new Date(expiry))
                 .signWith(key)
@@ -60,10 +59,10 @@ public class JwtService {
         return expiration.before(new Date(System.currentTimeMillis()));
     }
 
-    public boolean isTokenValid(String token, UserDetails userDetails) {
-        String username = extractUsername(token);
+    public boolean isTokenValid(String token, String username) {
+        String tokenUsername = extractUsername(token);
 
-        return username.equals(userDetails.getUsername())
+        return tokenUsername.equals(username)
                 && !isTokenExpired(token);
     }
 }

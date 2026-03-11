@@ -20,14 +20,14 @@ import java.util.Objects;
 @SQLRestriction("deleted = false")
 public class User extends BaseEntitySoftDelete {
 
+    @Column(name = "username", length = 100)
+    private String username;
+
     @Column(nullable = false, unique = true, length = 255)
     private String email;
 
     @Column(nullable = false, length = 255)
     private String password;
-
-    @Column(name = "display_name", length = 100)
-    private String displayName;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -37,14 +37,16 @@ public class User extends BaseEntitySoftDelete {
     // Factory
     // -------------------------------------------------------------------------
 
-    public static User register(String email, String hashedPassword) {
-        Objects.requireNonNull(email,          "email must not be null");
+    public static User create(String username, String email, String hashedPassword) {
+        Objects.requireNonNull(username, "username must not be null");
+        Objects.requireNonNull(email, "email must not be null");
         Objects.requireNonNull(hashedPassword, "hashedPassword must not be null");
 
         User user = new User();
-        user.email    = email.toLowerCase().trim();
+        user.username = username.trim();
+        user.email = email.toLowerCase().trim();
         user.password = hashedPassword;
-        user.role     = Role.USER;
+        user.role = Role.USER;
         return user;
     }
 
@@ -56,8 +58,8 @@ public class User extends BaseEntitySoftDelete {
         this.password = Objects.requireNonNull(newHashedPassword, "hashedPassword must not be null");
     }
 
-    public void updateDisplayName(String displayName) {
-        this.displayName = displayName != null ? displayName.trim() : null;
+    public void updateUsername(String username) {
+        this.username = username != null ? username.trim() : null;
     }
 
     /**
