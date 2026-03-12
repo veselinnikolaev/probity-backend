@@ -6,7 +6,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import me.veselin.probity.common.BaseEntitySoftDelete;
 import me.veselin.probity.auth.enumeration.Role;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLRestriction;
+import org.hibernate.type.SqlTypes;
 
 import java.util.Objects;
 
@@ -30,6 +32,7 @@ public class User extends BaseEntitySoftDelete {
     private String password;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false, length = 20)
     private Role role;
 
