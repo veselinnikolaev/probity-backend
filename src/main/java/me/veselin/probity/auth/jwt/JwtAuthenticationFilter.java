@@ -6,7 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.auth.domain.User;
-import me.veselin.probity.auth.service.UserService;
+import me.veselin.probity.auth.service.UserQueryService;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,7 +22,7 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final UserService userService;
+    private final UserQueryService userQueryService;
 
     @Override
     protected void doFilterInternal(
@@ -44,7 +44,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (username != null &&
                 SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            User user = userService.getByUsername(username);
+            User user = userQueryService.getByUsername(username);
 
             if (jwtService.isTokenValid(token, username)) {
 

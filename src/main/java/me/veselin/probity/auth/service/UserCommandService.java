@@ -14,15 +14,14 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
-public class UserService {
+public class UserCommandService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final UserQueryService userQueryService;
 
     public AuthResponse login(LoginRequest request){
-        User user = userRepository
-                .findByUsername(request.username())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userQueryService.getByUsername(request.username());
 
         if (!passwordEncoder.matches(
                 request.password(),
@@ -34,12 +33,6 @@ public class UserService {
         String token = jwtService.generateJwt(user.getUsername(), Map.of("role", user.getRole().name()));
 
         return new AuthResponse(token);
-    }
-
-    public User getByUsername(String username) {
-        return userRepository.findByUsername(username).orElseThrow(
-                () -> new RuntimeException("User not found")
-        );
     }
 
     public void register(RegisterRequest request) {

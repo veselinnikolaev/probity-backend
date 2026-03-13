@@ -10,6 +10,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
+import java.io.Serializable;
 import java.util.Objects;
 
 @Entity
@@ -20,7 +21,7 @@ import java.util.Objects;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED) // JPA requirement only
 @SQLRestriction("deleted = false")
-public class User extends BaseEntitySoftDelete {
+public class User extends BaseEntitySoftDelete implements Serializable {
 
     @Column(name = "username", length = 100)
     private String username;
