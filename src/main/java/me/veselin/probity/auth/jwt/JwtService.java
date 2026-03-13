@@ -22,6 +22,9 @@ public class JwtService {
             @Value("${jwt.expiration.seconds}") long expirationTime,
             @Value("${jwt.issuer}") String issuer
     ) {
+        if (secret.length() < 32) {
+            throw new IllegalArgumentException("JWT secret must be at least 32 characters");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes());
         this.expirationTime = expirationTime;
         this.issuer = issuer;
@@ -54,15 +57,9 @@ public class JwtService {
         return extractClaims(token).getSubject();
     }
 
-    public boolean isTokenExpired(String token) {
-        Date expiration = extractClaims(token).getExpiration();
-        return expiration.before(new Date(System.currentTimeMillis()));
-    }
-
     public boolean isTokenValid(String token, String username) {
-        String tokenUsername = extractUsername(token);
-
-        return tokenUsername.equals(username)
-                && !isTokenExpired(token);
+        Claims claims = extractClaims(token);
+        boolean notExpired = claims.getExpiration().after(new Date());
+        return claims.getSubject().equals(username) && notExpired;
     }
 }
