@@ -1,10 +1,12 @@
 package me.veselin.probity.auth.service;
 
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.auth.domain.User;
 import me.veselin.probity.auth.dto.AuthResponse;
 import me.veselin.probity.auth.dto.LoginRequest;
 import me.veselin.probity.auth.dto.RegisterRequest;
+import me.veselin.probity.auth.jwt.JwtBlacklistService;
 import me.veselin.probity.auth.jwt.JwtService;
 import me.veselin.probity.auth.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,6 +21,7 @@ public class UserCommandService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final UserQueryService userQueryService;
+    private final JwtBlacklistService blacklistService;
 
     public AuthResponse login(LoginRequest request){
         User user = userQueryService.getByUsername(request.username());
@@ -47,5 +50,13 @@ public class UserCommandService {
         String hashedPassword = passwordEncoder.encode(request.password());
         User user = User.create(request.username(), request.email(), hashedPassword);
         userRepository.save(user);
+    }
+
+    public void logout(String token) {
+        Claims claims = jwtService.extractClaims(token);
+
+        String jti = claims.getId();
+
+        blacklistService.blacklist(jti, claims.getExpiration().toInstant());
     }
 }

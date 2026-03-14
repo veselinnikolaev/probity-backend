@@ -18,9 +18,9 @@ public class JwtService {
     private final String issuer;
 
     public JwtService(
-            @Value("${jwt.secret}") String secret,
-            @Value("${jwt.expiration.seconds}") long expirationTime,
-            @Value("${jwt.issuer}") String issuer
+            @Value("${app.jwt.secret}") String secret,
+            @Value("${app.jwt.expiration.seconds}") long expirationTime,
+            @Value("${app.jwt.issuer}") String issuer
     ) {
         if (secret.length() < 32) {
             throw new IllegalArgumentException("JWT secret must be at least 32 characters");
@@ -55,6 +55,10 @@ public class JwtService {
 
     public String extractUsername(String token) {
         return extractClaims(token).getSubject();
+    }
+
+    public String extractJti(String token) {
+        return extractClaims(token).getId();
     }
 
     public boolean isTokenValid(String token, String username) {

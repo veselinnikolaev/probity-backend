@@ -2,7 +2,7 @@ package me.veselin.probity.config;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
@@ -15,18 +15,19 @@ import static org.springframework.data.redis.serializer.RedisSerializationContex
 public class CacheConfiguration {
     @Bean
     public RedisCacheConfiguration redisCacheConfiguration(ObjectMapper springDefaultMapper) {
-        // 1. Create a copy of the Spring Mapper to avoid messing with your Web API JSON
         ObjectMapper redisMapper = springDefaultMapper.copy();
 
-        // 2. Enable 'Default Typing' - This is the fix for the LinkedHashMap error
-        // It tells Jackson to store the class name in the JSON
         redisMapper.activateDefaultTyping(
-                LaissezFaireSubTypeValidator.instance,
+                BasicPolymorphicTypeValidator.builder()
+                        .allowIfSubType("me.veselin.probity")
+                        .allowIfSubType("java.util")
+                        .build(),
                 ObjectMapper.DefaultTyping.NON_FINAL,
                 JsonTypeInfo.As.PROPERTY
         );
 
         return RedisCacheConfiguration.defaultCacheConfig()
+                .disableCachingNullValues()
                 .serializeKeysWith(fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(fromSerializer(new GenericJackson2JsonRedisSerializer(redisMapper)));
     }

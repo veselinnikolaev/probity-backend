@@ -7,9 +7,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.auth.domain.User;
 import me.veselin.probity.auth.service.UserQueryService;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -23,6 +25,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserQueryService userQueryService;
+    private  final JwtBlacklistService jwtBlacklistService;
+    private final AuthenticationEntryPoint authenticationEntryPoint;
 
     @Override
     protected void doFilterInternal(
@@ -43,6 +47,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (username != null &&
                 SecurityContextHolder.getContext().getAuthentication() == null) {
+
+            String jti = jwtService.extractJti(token);
+            if (jti == null || jwtBlacklistService.isBlacklisted(jti)) {
+                authenticationEntryPoint.commence(
+                        request,
+                        response,
+                        new InsufficientAuthenticationException("Token has been revoked")
+                );
+                return;
+            }
 
             User user = userQueryService.getByUsername(username);
 
