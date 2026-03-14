@@ -1,5 +1,6 @@
 package me.veselin.probity.auth.jwt;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,15 +26,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserQueryService userQueryService;
-    private  final JwtBlacklistService jwtBlacklistService;
+    private  final JwtBlacklistService blacklistService;
     private final AuthenticationEntryPoint authenticationEntryPoint;
 
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
-            FilterChain filterChain)
-            throws ServletException, IOException {
+            FilterChain filterChain) throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
 
@@ -43,41 +43,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String token = authHeader.substring(7);
-        String username = jwtService.extractUsername(token);
 
-        if (username != null &&
-                SecurityContextHolder.getContext().getAuthentication() == null) {
+        try {
+            String username = jwtService.extractUsername(token);
 
-            String jti = jwtService.extractJti(token);
-            if (jti == null || jwtBlacklistService.isBlacklisted(jti)) {
-                authenticationEntryPoint.commence(
-                        request,
-                        response,
-                        new InsufficientAuthenticationException("Token has been revoked")
-                );
-                return;
+            if (username != null &&
+                    SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                String jti = jwtService.extractJti(token);
+                if (jti == null || blacklistService.isBlacklisted(jti)) {
+                    authenticationEntryPoint.commence(request, response,
+                            new InsufficientAuthenticationException("Token has been revoked"));
+                    return;
+                }
+
+                User user = userQueryService.getByUsername(username);
+
+                if (jwtService.isTokenValid(token, username)) {
+                    UsernamePasswordAuthenticationToken authToken =
+                            new UsernamePasswordAuthenticationToken(
+                                    user,
+                                    null,
+                                    List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
+                            );
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
             }
 
-            User user = userQueryService.getByUsername(username);
-
-            if (jwtService.isTokenValid(token, username)) {
-
-                UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(
-                                user,
-                                null,
-                                List.of(
-                                        new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
-                        );
-
-                authToken.setDetails(
-                        new WebAuthenticationDetailsSource()
-                                .buildDetails(request));
-
-                SecurityContextHolder
-                        .getContext()
-                        .setAuthentication(authToken);
-            }
+        } catch (JwtException e) {
+            // malformed, expired, invalid signature — all return 401
+            authenticationEntryPoint.commence(request, response,
+                    new InsufficientAuthenticationException("Invalid token"));
+            return;
         }
 
         filterChain.doFilter(request, response);

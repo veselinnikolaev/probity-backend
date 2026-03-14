@@ -3,6 +3,7 @@ package me.veselin.probity.auth.config;
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.auth.exception.ProbityAuthenticationEntryPoint;
 import me.veselin.probity.auth.jwt.JwtAuthenticationFilter;
+import me.veselin.probity.common.ApiRoutes;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -28,7 +29,7 @@ public class SecurityConfiguration {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**").permitAll()
+                        .requestMatchers(ApiRoutes.Auth.LOGIN, ApiRoutes.Auth.REGISTER).permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
