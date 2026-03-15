@@ -9,6 +9,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.util.HtmlUtils;
 
 import java.time.Instant;
 import java.util.Map;
@@ -35,7 +36,7 @@ public class GlobalExceptionHandler {
                 "status", 400,
                 "error", "Validation failed",
                 "fields", fieldErrors,
-                "path", request.getRequestURI(),
+                "path", HtmlUtils.htmlEscape(request.getRequestURI()),
                 "timestamp", Instant.now()
         ));
     }
@@ -48,7 +49,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
                 "status", 401,
                 "error", "Invalid credentials",  // never leak which field was wrong
-                "path", request.getRequestURI(),
+                "path", HtmlUtils.htmlEscape(request.getRequestURI()),
                 "timestamp", Instant.now()
         ));
     }
@@ -61,7 +62,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
                 "status", 409,
                 "error", ex.getMessage(),
-                "path", request.getRequestURI(),
+                "path", HtmlUtils.htmlEscape(request.getRequestURI()),
                 "timestamp", Instant.now()
         ));
     }
@@ -74,7 +75,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.internalServerError().body(Map.of(
                 "status", 500,
                 "error", "An unexpected error occurred",
-                "path", request.getRequestURI(),
+                "path", HtmlUtils.htmlEscape(request.getRequestURI()),
                 "timestamp", Instant.now()
         ));
     }

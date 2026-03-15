@@ -18,12 +18,11 @@ import java.util.List;
 @Component
 public class YahooFinanceAdapter {
 
-    private static final int DEFAULT_LOOKBACK_DAYS = 365;
-
     public List<PriceBarDto> fetchDailyBars(String symbol, LocalDate from) {
         try {
             Calendar fromCal = Calendar.getInstance();
-            fromCal.set(from.getYear(), from.getMonthValue() - 1, from.getDayOfMonth());
+            int pastMonth = from.getMonthValue() - 1;
+            fromCal.set(from.getYear(), pastMonth, from.getDayOfMonth());
 
             Stock stock = YahooFinance.get(symbol, fromCal, Interval.DAILY);
 

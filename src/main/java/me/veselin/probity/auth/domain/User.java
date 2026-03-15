@@ -26,10 +26,10 @@ public class User extends BaseEntitySoftDelete implements Serializable {
     @Column(name = "username", length = 100)
     private String username;
 
-    @Column(nullable = false, unique = true, length = 255)
+    @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(nullable = false, length = 255)
+    @Column(nullable = false)
     private String password;
 
     @Enumerated(EnumType.STRING)

@@ -24,7 +24,7 @@ import java.util.UUID;
 @SQLRestriction("deleted = false")
 public class Portfolio extends BaseEntitySoftDelete {
 
-    @Column(nullable = false, length = 255)
+    @Column(nullable = false)
     private String name;
 
     @Column(name = "user_id", nullable = false, updatable = false)

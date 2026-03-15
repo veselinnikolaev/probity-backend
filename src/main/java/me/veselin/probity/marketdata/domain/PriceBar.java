@@ -5,8 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.experimental.SuperBuilder;
 import me.veselin.probity.common.BaseEntitySoftDelete;
 import me.veselin.probity.marketdata.dto.PriceBarDto;
 

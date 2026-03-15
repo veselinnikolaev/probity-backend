@@ -26,7 +26,7 @@ public class Asset extends BaseEntityWithActive {
     @Column(nullable = false, unique = true, length = 20)
     private String ticker;
 
-    @Column(nullable = false, length = 255)
+    @Column(nullable = false)
     private String name;
 
     @Enumerated(EnumType.STRING)

@@ -1,5 +1,8 @@
 package me.veselin.probity.marketdata.enumeration;
 
+import lombok.Getter;
+
+@Getter
 public enum ZoneIdEnumeration {
     NEW_YORK("America/New_York"),
     LONDON("Europe/London"),
@@ -13,7 +16,4 @@ public enum ZoneIdEnumeration {
         this.zoneId = zoneId;
     }
 
-    public String getZoneId() {
-        return zoneId;
-    }
 }
