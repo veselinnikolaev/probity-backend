@@ -42,9 +42,6 @@ public abstract class BaseIntegrationTest {
         // Redis
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
-
-        // JWT — must be set or app refuses to start
-        registry.add("jwt.secret", () -> "dGVzdC1zZWNyZXQta2V5LWZvci1pbnRlZ3JhdGlvbi10ZXN0cwo=");
     }
 
     @BeforeEach
