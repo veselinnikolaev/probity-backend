@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.auth.domain.User;
+import me.veselin.probity.auth.exception.UnauthorizedException;
 import me.veselin.probity.auth.service.UserQueryService;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -26,7 +27,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserQueryService userQueryService;
-    private  final JwtBlacklistService blacklistService;
     private final AuthenticationEntryPoint authenticationEntryPoint;
 
     @Override
@@ -51,9 +51,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().getAuthentication() == null) {
 
                 String jti = jwtService.extractJti(token);
-                if (jti == null || blacklistService.isBlacklisted(jti)) {
-                    authenticationEntryPoint.commence(request, response,
-                            new InsufficientAuthenticationException("Token has been revoked"));
+                if (jti == null || jwtService.isBlacklisted(jti)) {
+                    authenticationEntryPoint.commence(request, response, new InsufficientAuthenticationException("Token has been revoked"));
                     return;
                 }
 
@@ -71,10 +70,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
 
-        } catch (JwtException e) {
-            // malformed, expired, invalid signature — all return 401
+        } catch (JwtException | UnauthorizedException e) {
             authenticationEntryPoint.commence(request, response,
-                    new InsufficientAuthenticationException("Invalid token"));
+                    new InsufficientAuthenticationException(e.getMessage()));
             return;
         }
 

@@ -6,7 +6,7 @@ import me.veselin.probity.auth.domain.User;
 import me.veselin.probity.auth.dto.AuthResponse;
 import me.veselin.probity.auth.dto.LoginRequest;
 import me.veselin.probity.auth.dto.RegisterRequest;
-import me.veselin.probity.auth.jwt.JwtBlacklistService;
+import me.veselin.probity.auth.exception.UnauthorizedException;
 import me.veselin.probity.auth.jwt.JwtService;
 import me.veselin.probity.auth.repository.UserRepository;
 import me.veselin.probity.common.exception.ConflictException;
@@ -22,7 +22,6 @@ public class UserCommandService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final JwtBlacklistService blacklistService;
 
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByUsername(request.username())
@@ -35,12 +34,17 @@ public class UserCommandService {
             throw new BadCredentialsException("Invalid credentials");
         }
 
-        String token = jwtService.generateJwt(
+        String accessToken = jwtService.generateAccessJwt(
+                user.getUsername(),
+                Map.of("role", user.getRole().name())
+        );
+        String refreshToken = jwtService.generateRefreshJwt(
                 user.getUsername(),
                 Map.of("role", user.getRole().name())
         );
 
-        return new AuthResponse(token);
+        jwtService.saveRefreshToken(refreshToken);
+        return new AuthResponse(accessToken, refreshToken);
     }
 
     public void register(RegisterRequest request) {
@@ -57,10 +61,30 @@ public class UserCommandService {
     }
 
     public void logout(String token) {
-        Claims claims = jwtService.extractClaims(token);
+        jwtService.blacklistToken(token);
+        jwtService.deleteCorrespondingRefreshToken(token);
+    }
 
-        String jti = claims.getId();
+    public AuthResponse refresh(String incomingRefreshToken) {
+        Claims claims = jwtService.extractClaims(incomingRefreshToken);
+        String username = claims.getSubject();
 
-        blacklistService.blacklist(jti, claims.getExpiration().toInstant());
+        String stored = jwtService.getRefreshToken(username);
+
+        if (stored == null || !stored.equals(incomingRefreshToken)) {
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+
+        if (!jwtService.isTokenValid(incomingRefreshToken, username)) {
+            throw new UnauthorizedException("Refresh token expired");
+        }
+
+        String newAccessToken = jwtService.generateAccessJwt(username, Map.of("role", claims.get("role", String.class)));
+
+        // rotation — old refresh token replaced with new one
+        String newRefreshToken = jwtService.generateRefreshJwt(username, Map.of("role", claims.get("role", String.class)));
+        jwtService.saveRefreshToken(newRefreshToken);
+
+        return new AuthResponse(newAccessToken, newRefreshToken);
     }
 }

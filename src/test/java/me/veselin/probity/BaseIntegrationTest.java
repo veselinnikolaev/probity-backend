@@ -1,7 +1,5 @@
 package me.veselin.probity;
 
-import me.veselin.probity.auth.dto.RegisterRequest;
-import me.veselin.probity.auth.service.UserCommandService;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -20,7 +18,7 @@ import org.junit.jupiter.api.Order;
 @Testcontainers
 public abstract class BaseIntegrationTest {
     @Autowired RedisTemplate<String, String> redisTemplate;
-    @Autowired UserCommandService userCommandService;
+
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16")
@@ -51,13 +49,5 @@ public abstract class BaseIntegrationTest {
                 .getConnection()
                 .serverCommands()
                 .flushDb(); // clears db 1 only
-    }
-
-    @BeforeEach
-    @Order(2)
-    void seedTestUser() {
-        try {
-            userCommandService.register(new RegisterRequest("admin", "admin@probity.test", "Password123!"));
-        } catch (Exception ignored) {}
     }
 }

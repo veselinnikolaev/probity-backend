@@ -1,6 +1,7 @@
 package me.veselin.probity.common.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import me.veselin.probity.auth.exception.UnauthorizedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -43,12 +44,12 @@ public class GlobalExceptionHandler {
 
     // ── 401 ───────────────────────────────────────────────────────────────────
 
-    @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class})
+    @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class, UnauthorizedException.class})
     public ResponseEntity<?> handleUnauthorized(RuntimeException ex,
                                                 HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
                 "status", 401,
-                "error", "Invalid credentials",  // never leak which field was wrong
+                "error", ex.getMessage(),
                 "path", HtmlUtils.htmlEscape(request.getRequestURI()),
                 "timestamp", Instant.now()
         ));
