@@ -66,10 +66,6 @@ public class User extends BaseEntitySoftDelete implements Serializable {
         this.username = username != null ? username.trim() : null;
     }
 
-    /**
-     * Elevates this user to ADMIN. Should only be called from an
-     * admin management service with appropriate authorization.
-     */
     public void promoteToAdmin() {
         this.role = Role.ADMIN;
     }
