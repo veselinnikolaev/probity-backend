@@ -5,8 +5,7 @@ import me.veselin.probity.BaseIntegrationTest;
 import me.veselin.probity.auth.dto.RegisterRequest;
 import me.veselin.probity.auth.service.UserCommandService;
 import me.veselin.probity.common.ApiRoutes;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Order;
+import me.veselin.probity.common.exception.ConflictException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,12 +40,11 @@ public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
         );
     }
 
-    @BeforeEach
-    @Order(2)
-    void seedTestUser() {
+    @Override
+    protected void afterSetUp() {
         try {
             userCommandService.register(new RegisterRequest("admin", "admin@probity.test", "Password123!"));
-        } catch (Exception ignored) {
+        } catch (ConflictException ignored) {
         }
     }
 }

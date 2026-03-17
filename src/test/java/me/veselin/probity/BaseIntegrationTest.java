@@ -8,7 +8,6 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.data.redis.core.RedisTemplate;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.junit.jupiter.api.Order;
 
 import java.time.Duration;
 
@@ -35,11 +34,13 @@ public abstract class BaseIntegrationTest {
     }
 
     @BeforeEach
-    @Order(1)
     void cleanRedis() {
         redisTemplate.getConnectionFactory()
                 .getConnection()
                 .serverCommands()
                 .flushDb();
+        afterSetUp();
     }
+
+    protected void afterSetUp() {}
 }
