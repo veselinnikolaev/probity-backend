@@ -1,7 +1,6 @@
-package me.veselin.probity.auth.config;
+package me.veselin.probity.bff.security;
 
 import lombok.RequiredArgsConstructor;
-import me.veselin.probity.auth.jwt.JwtAuthenticationFilter;
 import me.veselin.probity.common.ApiRoutes;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,6 +8,8 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -42,5 +43,10 @@ public class SecurityConfiguration {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint));
 
         return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 }

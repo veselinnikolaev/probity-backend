@@ -3,11 +3,12 @@ package me.veselin.probity.auth.service;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.auth.domain.User;
-import me.veselin.probity.auth.dto.AuthResponse;
-import me.veselin.probity.auth.dto.LoginRequest;
-import me.veselin.probity.auth.dto.RegisterRequest;
+import me.veselin.probity.auth.dto.LoginCommand;
+import me.veselin.probity.auth.dto.RegisterCommand;
+import me.veselin.probity.auth.dto.AuthResult;
 import me.veselin.probity.auth.exception.UnauthorizedException;
 import me.veselin.probity.auth.jwt.JwtService;
+import me.veselin.probity.auth.port.AuthCommandPort;
 import me.veselin.probity.auth.repository.UserRepository;
 import me.veselin.probity.common.exception.ConflictException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -18,12 +19,12 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
-public class UserCommandService {
+public class UserCommandService implements AuthCommandPort {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
-    public AuthResponse login(LoginRequest request) {
+    public AuthResult login(LoginCommand request) {
         User user = userRepository.findByUsername(request.username())
                 .orElse(null);
 
@@ -34,20 +35,21 @@ public class UserCommandService {
             throw new BadCredentialsException("Invalid credentials");
         }
 
+        String role = user.getRole().name();
         String accessToken = jwtService.generateAccessJwt(
                 user.getUsername(),
-                Map.of("role", user.getRole().name())
+                Map.of("role", role)
         );
         String refreshToken = jwtService.generateRefreshJwt(
                 user.getUsername(),
-                Map.of("role", user.getRole().name())
+                Map.of("role", role)
         );
 
         jwtService.saveRefreshToken(refreshToken);
-        return new AuthResponse(accessToken, refreshToken);
+        return new AuthResult(accessToken, refreshToken, role);
     }
 
-    public void register(RegisterRequest request) {
+    public void register(RegisterCommand request) {
         if (userRepository.existsByUsername(request.username())) {
             throw new ConflictException("Username already taken");
         }
@@ -60,12 +62,12 @@ public class UserCommandService {
         userRepository.save(user);
     }
 
-    public void logout(String token) {
-        jwtService.blacklistToken(token);
-        jwtService.deleteCorrespondingRefreshToken(token);
+    public void logout(String refreshToken) {
+        jwtService.blacklistToken(refreshToken);
+        jwtService.deleteRefreshToken(refreshToken);
     }
 
-    public AuthResponse refresh(String incomingRefreshToken) {
+    public AuthResult refresh(String incomingRefreshToken) {
         Claims claims = jwtService.extractClaims(incomingRefreshToken);
         String username = claims.getSubject();
 
@@ -85,6 +87,6 @@ public class UserCommandService {
         String newRefreshToken = jwtService.generateRefreshJwt(username, Map.of("role", claims.get("role", String.class)));
         jwtService.saveRefreshToken(newRefreshToken);
 
-        return new AuthResponse(newAccessToken, newRefreshToken);
+        return new AuthResult(newAccessToken, newRefreshToken, claims.get("role", String.class));
     }
 }

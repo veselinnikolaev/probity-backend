@@ -7,25 +7,24 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 public class LoginIntegrationTest extends BaseAuthIntegrationTest {
 
     @Autowired MockMvc mockMvc;
 
     @Test
-    void login_withValidCredentials_returnsJwt() throws Exception {
+    void login_withValidCredentials_returnsUsernameAndRole() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username": "admin", "password": "Password123!"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").exists())
-                .andExpect(jsonPath("$.accessToken").isString())
-                .andExpect(jsonPath("$.refreshToken").exists())
-                .andExpect(jsonPath("$.refreshToken").isString());
+                .andExpect(jsonPath("$.username").exists())
+                .andExpect(jsonPath("$.username").isString())
+                .andExpect(jsonPath("$.role").exists())
+                .andExpect(jsonPath("$.role").isString());
     }
 
     @Test
@@ -79,5 +78,21 @@ public class LoginIntegrationTest extends BaseAuthIntegrationTest {
                         .content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fields").exists());
+    }
+
+    @Test
+    void login_withValidCredentials_setsCookies() throws Exception {
+        mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {"username": "admin", "password": "Password123!"}
+                            """))
+                .andExpect(status().isOk())
+                .andExpect(cookie().exists("access_token"))
+                .andExpect(cookie().httpOnly("access_token", true))
+                .andExpect(cookie().exists("refresh_token"))
+                .andExpect(cookie().httpOnly("refresh_token", true))
+                .andExpect(jsonPath("$.username").value("admin"))
+                .andExpect(jsonPath("$.role").exists());
     }
 }

@@ -25,7 +25,7 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
                                     "password": "Password123!"
                                 }
                                 """))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
     }
 
     @Test

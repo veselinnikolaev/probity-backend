@@ -102,8 +102,16 @@ public class JwtService {
         return redisTemplate.hasKey(blacklistedPrefix + jti);
     }
 
-    public void saveRefreshToken(String token) {
-        redisTemplate.opsForValue().set(refreshPrefix + extractUsername(token), token, refreshExpirationTime, TimeUnit.SECONDS);
+    public void saveRefreshToken(String refreshToken) {
+        redisTemplate.opsForValue().set(refreshPrefix + extractUsername(refreshToken), refreshToken, refreshExpirationTime, TimeUnit.SECONDS);
+    }
+
+    public String getRefreshToken(String username) {
+        return redisTemplate.opsForValue().get(refreshPrefix + username);
+    }
+
+    public void deleteRefreshToken(String refreshToken) {
+        redisTemplate.delete(refreshPrefix + extractUsername(refreshToken));
     }
 
     private String constructJwt(String subject, Map<String, Object> claims, long expiration) {
@@ -116,13 +124,5 @@ public class JwtService {
                 .expiration(new Date(expiration))
                 .signWith(key)
                 .compact();
-    }
-
-    public String getRefreshToken(String username) {
-        return redisTemplate.opsForValue().get(refreshPrefix + username);
-    }
-
-    public void deleteCorrespondingRefreshToken(String token) {
-        redisTemplate.delete(refreshPrefix + extractUsername(token));
     }
 }

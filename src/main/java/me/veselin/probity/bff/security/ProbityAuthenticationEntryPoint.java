@@ -1,4 +1,4 @@
-package me.veselin.probity.auth.exception;
+package me.veselin.probity.bff.security;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

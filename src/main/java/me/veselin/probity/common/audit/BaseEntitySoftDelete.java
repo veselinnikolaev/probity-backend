@@ -1,4 +1,4 @@
-package me.veselin.probity.common;
+package me.veselin.probity.common.audit;
 
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -10,7 +10,7 @@ import java.util.UUID;
 @MappedSuperclass
 @Getter
 @Setter
-public abstract class BaseEntityWithActive {
+public abstract class BaseEntitySoftDelete {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -23,11 +23,11 @@ public abstract class BaseEntityWithActive {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(nullable = false, name = "active")
-    private Boolean active = true;
+    @Column(nullable = false, name = "deleted")
+    private Boolean deleted = false;
 
-    @Column(name = "archived_at")
-    private LocalDateTime archivedAt;
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 
     @Version
     @Column(nullable = false)
@@ -43,8 +43,8 @@ public abstract class BaseEntityWithActive {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public void archive() {
-        this.active = false;
-        this.archivedAt = LocalDateTime.now();
+    public void softDelete() {
+        this.deleted = true;
+        this.deletedAt = LocalDateTime.now();
     }
 }

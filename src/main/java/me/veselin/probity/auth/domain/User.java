@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import me.veselin.probity.common.BaseEntitySoftDelete;
+import me.veselin.probity.common.audit.BaseEntitySoftDelete;
 import me.veselin.probity.auth.enumeration.Role;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLRestriction;

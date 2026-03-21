@@ -5,7 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
-import me.veselin.probity.common.BaseEntitySoftDelete;
+import me.veselin.probity.common.audit.BaseEntitySoftDelete;
 import me.veselin.probity.marketdata.dto.PriceBarDto;
 
 import java.math.BigDecimal;
