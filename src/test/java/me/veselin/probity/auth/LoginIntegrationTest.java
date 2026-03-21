@@ -1,5 +1,6 @@
 package me.veselin.probity.auth;
 
+import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.common.ApiRoutes;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -88,10 +89,10 @@ public class LoginIntegrationTest extends BaseAuthIntegrationTest {
                             {"username": "admin", "password": "Password123!"}
                             """))
                 .andExpect(status().isOk())
-                .andExpect(cookie().exists("access_token"))
-                .andExpect(cookie().httpOnly("access_token", true))
-                .andExpect(cookie().exists("refresh_token"))
-                .andExpect(cookie().httpOnly("refresh_token", true))
+                .andExpect(cookie().exists(Token.ACCESS.getCookieName()))
+                .andExpect(cookie().httpOnly(Token.ACCESS.getCookieName(), true))
+                .andExpect(cookie().exists(Token.REFRESH.getCookieName()))
+                .andExpect(cookie().httpOnly(Token.REFRESH.getCookieName(), true))
                 .andExpect(jsonPath("$.username").value("admin"))
                 .andExpect(jsonPath("$.role").exists());
     }

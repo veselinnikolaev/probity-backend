@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.auth.dto.LoginCommand;
 import me.veselin.probity.auth.dto.RegisterCommand;
+import me.veselin.probity.auth.exception.UnauthorizedException;
 import me.veselin.probity.bff.cookie.CookieService;
 import me.veselin.probity.bff.dto.AuthResponse;
 import me.veselin.probity.bff.dto.LoginRequest;
@@ -49,8 +50,12 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<Void> refresh(@CookieValue("refresh_token") String refreshToken,
+    public ResponseEntity<Void> refresh(@CookieValue(value = "refresh_token", required = false) String refreshToken,
                                         HttpServletResponse response) {
+        if (refreshToken == null) {
+            throw new UnauthorizedException("Refresh token is missing");
+        }
+
         AuthResult result = authCommandPort.refresh(refreshToken);
 
         response.addHeader(HttpHeaders.SET_COOKIE,
@@ -62,14 +67,14 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@CookieValue("refresh_token") String refreshToken,
-                                       HttpServletResponse response) {
-        authCommandPort.logout(refreshToken);  // blacklist the refresh token, not access token
+    public ResponseEntity<Void> logout(
+            @CookieValue(value = "refresh_token", required = false) String refreshToken,
+            @CookieValue(value = "access_token", required = false) String accessToken,
+            HttpServletResponse response) {
+        authCommandPort.logout(accessToken, refreshToken);
 
-        response.addHeader(HttpHeaders.SET_COOKIE,
-                cookieService.clearAccessCookie().toString());
-        response.addHeader(HttpHeaders.SET_COOKIE,
-                cookieService.clearRefreshCookie().toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, cookieService.clearAccessCookie().toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, cookieService.clearRefreshCookie().toString());
 
         return ResponseEntity.noContent().build();
     }

@@ -35,7 +35,8 @@ public class SecurityConfiguration {
                         .requestMatchers(
                                 ApiRoutes.Auth.LOGIN,
                                 ApiRoutes.Auth.REGISTER,
-                                ApiRoutes.Auth.REFRESH
+                                ApiRoutes.Auth.REFRESH,
+                                ApiRoutes.Auth.LOGOUT
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

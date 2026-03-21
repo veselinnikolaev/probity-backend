@@ -2,6 +2,7 @@ package me.veselin.probity.auth;
 
 import jakarta.servlet.http.Cookie;
 import me.veselin.probity.auth.dto.AuthResult;
+import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.common.ApiRoutes;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,41 +17,11 @@ public class LogoutIntegrationTest extends BaseAuthIntegrationTest {
     @Autowired MockMvc mockMvc;
 
     @Test
-    void logout_withValidToken_returns200() throws Exception {
-        String token = login().accessToken();
-
-        mockMvc.perform(post(ApiRoutes.Auth.LOGOUT)
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void logout_blacklistedToken_cannotLogoutAgain() throws Exception {
-        String token = login().accessToken();
-
-        mockMvc.perform(post(ApiRoutes.Auth.LOGOUT)
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(post(ApiRoutes.Auth.LOGOUT)
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("Token has been revoked"));
-    }
-
-    @Test
-    void logout_withMalformedAuthHeader_returns401() throws Exception {
-        mockMvc.perform(post(ApiRoutes.Auth.LOGOUT)
-                        .header("Authorization", "NotBearer token"))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
     void logout_withValidToken_returns204() throws Exception {
         AuthResult tokens = login();
 
         mockMvc.perform(post(ApiRoutes.Auth.LOGOUT)
-                        .cookie(new Cookie("refresh_token", tokens.refreshToken())))
+                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken())))
                 .andExpect(status().isNoContent());
     }
 
@@ -59,13 +30,13 @@ public class LogoutIntegrationTest extends BaseAuthIntegrationTest {
         AuthResult tokens = login();
 
         mockMvc.perform(post(ApiRoutes.Auth.LOGOUT)
-                        .cookie(new Cookie("refresh_token", tokens.refreshToken())))
+                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken())))
                 .andExpect(status().isNoContent());
 
         // access token still in cookie — filter should reject it if blacklisted
         // or simply expire — here we test the refresh token is invalidated
         mockMvc.perform(post(ApiRoutes.Auth.REFRESH)
-                        .cookie(new Cookie("refresh_token", tokens.refreshToken())))
+                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken())))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Invalid refresh token"));
     }
@@ -79,7 +50,7 @@ public class LogoutIntegrationTest extends BaseAuthIntegrationTest {
     @Test
     void logout_withInvalidToken_returns401() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.LOGOUT)
-                        .cookie(new Cookie("refresh_token", "notavalidtoken")))
+                        .cookie(new Cookie(Token.REFRESH.getCookieName(), "notavalidtoken")))
                 .andExpect(status().isUnauthorized());
     }
 }

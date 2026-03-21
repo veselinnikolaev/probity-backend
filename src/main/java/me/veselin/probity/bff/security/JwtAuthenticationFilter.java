@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.auth.domain.User;
+import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.auth.jwt.JwtService;
 import me.veselin.probity.auth.port.AuthQueryPort;
 import me.veselin.probity.auth.exception.UnauthorizedException;
@@ -84,7 +85,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // 1. try cookie first (browser clients)
         if (request.getCookies() != null) {
             for (Cookie cookie : request.getCookies()) {
-                if ("access_token".equals(cookie.getName())) {
+                if (Token.ACCESS.getCookieName().equals(cookie.getName())) {
                     return cookie.getValue();
                 }
             }

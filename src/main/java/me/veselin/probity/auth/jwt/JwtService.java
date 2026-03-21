@@ -94,24 +94,24 @@ public class JwtService {
         String jti = claims.getId();
         Duration ttl = Duration.between(Instant.now(), claims.getExpiration().toInstant());
         if (!ttl.isNegative() && !ttl.isZero()) {
-            redisTemplate.opsForValue().set(blacklistedPrefix + jti, "1", ttl);
+            redisTemplate.opsForValue().set(blacklistKey(jti), "1", ttl);
         }
     }
 
     public boolean isBlacklisted(String jti) {
-        return redisTemplate.hasKey(blacklistedPrefix + jti);
+        return redisTemplate.hasKey(blacklistKey(jti));
     }
 
     public void saveRefreshToken(String refreshToken) {
-        redisTemplate.opsForValue().set(refreshPrefix + extractUsername(refreshToken), refreshToken, refreshExpirationTime, TimeUnit.SECONDS);
+        redisTemplate.opsForValue().set(refreshKey(extractJti(refreshToken)), refreshToken, refreshExpirationTime, TimeUnit.SECONDS);
     }
 
-    public String getRefreshToken(String username) {
-        return redisTemplate.opsForValue().get(refreshPrefix + username);
+    public String getRefreshToken(String jti) {
+        return redisTemplate.opsForValue().get(refreshKey(jti));
     }
 
     public void deleteRefreshToken(String refreshToken) {
-        redisTemplate.delete(refreshPrefix + extractUsername(refreshToken));
+        redisTemplate.delete(refreshKey(extractJti(refreshToken)));
     }
 
     private String constructJwt(String subject, Map<String, Object> claims, long expiration) {
@@ -124,5 +124,13 @@ public class JwtService {
                 .expiration(new Date(expiration))
                 .signWith(key)
                 .compact();
+    }
+
+    private String blacklistKey(String jti){
+        return blacklistedPrefix + jti;
+    }
+
+    private String refreshKey(String jti){
+        return refreshPrefix + jti;
     }
 }

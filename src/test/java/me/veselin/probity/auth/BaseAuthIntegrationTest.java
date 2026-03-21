@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import me.veselin.probity.BaseIntegrationTest;
 import me.veselin.probity.auth.dto.RegisterCommand;
+import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.auth.port.AuthCommandPort;
 import me.veselin.probity.auth.dto.AuthResult;
 import me.veselin.probity.common.ApiRoutes;
@@ -35,8 +36,8 @@ public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String accessToken = getCookieValue(result, "access_token");
-        String refreshToken = getCookieValue(result, "refresh_token");
+        String accessToken = getCookieValue(result, Token.ACCESS.getCookieName());
+        String refreshToken = getCookieValue(result, Token.REFRESH.getCookieName());
         String role = objectMapper.readTree(result.getResponse().getContentAsString())
                 .get("role").asText();
 

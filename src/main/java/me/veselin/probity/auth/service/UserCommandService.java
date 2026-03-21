@@ -62,16 +62,30 @@ public class UserCommandService implements AuthCommandPort {
         userRepository.save(user);
     }
 
-    public void logout(String refreshToken) {
-        jwtService.blacklistToken(refreshToken);
-        jwtService.deleteRefreshToken(refreshToken);
+    public void logout(String accessToken, String refreshToken) {
+        if (accessToken == null && refreshToken == null) {
+            throw new UnauthorizedException("No tokens provided");
+        }
+
+        if (refreshToken != null) {
+            Claims claims = jwtService.extractClaims(refreshToken); // throws if invalid
+            String stored = jwtService.getRefreshToken(claims.getId());
+            if (stored == null) {
+                throw new UnauthorizedException("Invalid refresh token");
+            }
+            jwtService.deleteRefreshToken(refreshToken);
+        }
+
+        if (accessToken != null) {
+            jwtService.blacklistToken(accessToken); // throws if invalid/malformed
+        }
     }
 
     public AuthResult refresh(String incomingRefreshToken) {
         Claims claims = jwtService.extractClaims(incomingRefreshToken);
         String username = claims.getSubject();
 
-        String stored = jwtService.getRefreshToken(username);
+        String stored = jwtService.getRefreshToken(claims.getId());
 
         if (stored == null || !stored.equals(incomingRefreshToken)) {
             throw new UnauthorizedException("Invalid refresh token");
@@ -81,12 +95,13 @@ public class UserCommandService implements AuthCommandPort {
             throw new UnauthorizedException("Refresh token expired");
         }
 
-        String newAccessToken = jwtService.generateAccessJwt(username, Map.of("role", claims.get("role", String.class)));
+        jwtService.deleteRefreshToken(incomingRefreshToken); // ← delete old
 
-        // rotation — old refresh token replaced with new one
-        String newRefreshToken = jwtService.generateRefreshJwt(username, Map.of("role", claims.get("role", String.class)));
+        String role = claims.get("role", String.class);
+        String newAccessToken = jwtService.generateAccessJwt(username, Map.of("role", role));
+        String newRefreshToken = jwtService.generateRefreshJwt(username, Map.of("role", role));
         jwtService.saveRefreshToken(newRefreshToken);
 
-        return new AuthResult(newAccessToken, newRefreshToken, claims.get("role", String.class));
+        return new AuthResult(newAccessToken, newRefreshToken, role);
     }
 }
