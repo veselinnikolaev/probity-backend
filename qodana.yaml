@@ -5,7 +5,7 @@ image: jetbrains/qodana-jvm:2025.3
 profile:
   name: qodana.recommended
 
-bootstrap: mvn install -DskipTests
+bootstrap: chmod +x mvnw && ./mvnw install -DskipTests
 
 failThreshold: 0
 
