@@ -69,11 +69,11 @@ public class UserCommandService implements AuthCommandPort {
 
         if (refreshToken != null) {
             Claims claims = jwtService.extractClaims(refreshToken); // throws if invalid
-            String stored = jwtService.getRefreshToken(claims.getId());
+            String stored = jwtService.getRefreshTokenByJti(claims.getId());
             if (stored == null) {
                 throw new UnauthorizedException("Invalid refresh token");
             }
-            jwtService.deleteRefreshToken(refreshToken);
+            jwtService.deleteRefreshTokenByJti(claims.getId());
         }
 
         if (accessToken != null) {
@@ -85,7 +85,7 @@ public class UserCommandService implements AuthCommandPort {
         Claims claims = jwtService.extractClaims(incomingRefreshToken);
         String username = claims.getSubject();
 
-        String stored = jwtService.getRefreshToken(claims.getId());
+        String stored = jwtService.getRefreshTokenByJti(claims.getId());
 
         if (stored == null || !stored.equals(incomingRefreshToken)) {
             throw new UnauthorizedException("Invalid refresh token");
@@ -95,7 +95,7 @@ public class UserCommandService implements AuthCommandPort {
             throw new UnauthorizedException("Refresh token expired");
         }
 
-        jwtService.deleteRefreshToken(incomingRefreshToken); // ← delete old
+        jwtService.deleteRefreshTokenByJti(claims.getId()); // ← delete old
 
         String role = claims.get("role", String.class);
         String newAccessToken = jwtService.generateAccessJwt(username, Map.of("role", role));

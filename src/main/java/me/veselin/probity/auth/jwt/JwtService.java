@@ -106,12 +106,12 @@ public class JwtService {
         redisTemplate.opsForValue().set(refreshKey(extractJti(refreshToken)), refreshToken, refreshExpirationTime, TimeUnit.SECONDS);
     }
 
-    public String getRefreshToken(String jti) {
+    public String getRefreshTokenByJti(String jti) {
         return redisTemplate.opsForValue().get(refreshKey(jti));
     }
 
-    public void deleteRefreshToken(String refreshToken) {
-        redisTemplate.delete(refreshKey(extractJti(refreshToken)));
+    public void deleteRefreshTokenByJti(String jti) {
+        redisTemplate.delete(refreshKey(jti));
     }
 
     private String constructJwt(String subject, Map<String, Object> claims, long expiration) {
