@@ -12,6 +12,7 @@ public final class ApiRoutes {
         public static final String LOGIN    = ROOT + "/login";
         public static final String REGISTER = ROOT + "/register";
         public static final String LOGOUT   = ROOT + "/logout";
+        public static final String REFRESH  = ROOT + "/refresh";
     }
 
     public static final class Users {

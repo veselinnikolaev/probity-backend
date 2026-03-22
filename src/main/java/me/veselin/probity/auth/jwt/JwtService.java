@@ -1,56 +1,78 @@
 package me.veselin.probity.auth.jwt;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
+import me.veselin.probity.auth.exception.UnauthorizedException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
+@RequiredArgsConstructor
 public class JwtService {
-    private final SecretKey key;
-    private final long expirationTime;
-    private final String issuer;
+    private final RedisTemplate<String, String> redisTemplate;
 
-    public JwtService(
-            @Value("${app.jwt.secret}") String secret,
-            @Value("${app.jwt.expiration.seconds}") long expirationTime,
-            @Value("${app.jwt.issuer}") String issuer
-    ) {
+    @Value("${app.jwt.secret}")
+    private String secret;
+    private SecretKey key;
+
+    @Value("${app.jwt.access.expiration.seconds}")
+    private long accessExpirationTime;
+    @Value("${app.jwt.refresh.expiration.seconds}")
+    private long refreshExpirationTime;
+
+    @Value("${app.jwt.issuer}")
+    private String issuer;
+
+    @Value("${app.jwt.refresh-prefix}")
+    private String refreshPrefix;
+    @Value("${app.jwt.blacklist-prefix}")
+    private String blacklistedPrefix;
+
+    @PostConstruct
+    public void setKey() {
         if (secret.length() < 32) {
             throw new IllegalArgumentException("JWT secret must be at least 32 characters");
         }
         this.key = Keys.hmacShaKeyFor(secret.getBytes());
-        this.expirationTime = expirationTime;
-        this.issuer = issuer;
     }
 
-    public String generateJwt(String subject, Map<String, Object> claims) {
-        long now = System.currentTimeMillis();
-        long expiry = now + expirationTime * 1000;
+    public String generateAccessJwt(String subject, Map<String, Object> claims) {
+        long expiry = System.currentTimeMillis() + accessExpirationTime * 1000;
 
-        return Jwts.builder()
-                .id(UUID.randomUUID().toString())
-                .issuer(issuer)
-                .subject(subject)
-                .claims(claims)
-                .issuedAt(new Date(now))
-                .expiration(new Date(expiry))
-                .signWith(key)
-                .compact();
+        return constructJwt(subject, claims, expiry);
     }
 
-    public Claims extractClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(key)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+    public String generateRefreshJwt(String subject, Map<String, Object> claims) {
+        long expiry = System.currentTimeMillis() + refreshExpirationTime * 1000;
+
+        return constructJwt(subject, claims, expiry);
+    }
+
+    public Claims extractClaims(String token) throws UnauthorizedException {
+        try {
+            return Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+        } catch (ExpiredJwtException e) {
+            throw new UnauthorizedException("Token expired");
+        } catch (Exception e) {
+            throw new UnauthorizedException("Invalid token");
+        }
     }
 
     public String extractUsername(String token) {
@@ -63,7 +85,52 @@ public class JwtService {
 
     public boolean isTokenValid(String token, String username) {
         Claims claims = extractClaims(token);
-        boolean notExpired = claims.getExpiration().after(new Date());
+        boolean notExpired = claims.getExpiration().after(new Date(System.currentTimeMillis()));
         return claims.getSubject().equals(username) && notExpired;
+    }
+
+    public void blacklistToken(String token) {
+        Claims claims = extractClaims(token);
+        String jti = claims.getId();
+        Duration ttl = Duration.between(Instant.now(), claims.getExpiration().toInstant());
+        if (!ttl.isNegative() && !ttl.isZero()) {
+            redisTemplate.opsForValue().set(blacklistKey(jti), "1", ttl);
+        }
+    }
+
+    public boolean isBlacklisted(String jti) {
+        return redisTemplate.hasKey(blacklistKey(jti));
+    }
+
+    public void saveRefreshToken(String refreshToken) {
+        redisTemplate.opsForValue().set(refreshKey(extractJti(refreshToken)), refreshToken, refreshExpirationTime, TimeUnit.SECONDS);
+    }
+
+    public String getRefreshTokenByJti(String jti) {
+        return redisTemplate.opsForValue().get(refreshKey(jti));
+    }
+
+    public void deleteRefreshTokenByJti(String jti) {
+        redisTemplate.delete(refreshKey(jti));
+    }
+
+    private String constructJwt(String subject, Map<String, Object> claims, long expiration) {
+        return Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .issuer(issuer)
+                .subject(subject)
+                .claims(claims)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(expiration))
+                .signWith(key)
+                .compact();
+    }
+
+    private String blacklistKey(String jti){
+        return blacklistedPrefix + jti;
+    }
+
+    private String refreshKey(String jti){
+        return refreshPrefix + jti;
     }
 }

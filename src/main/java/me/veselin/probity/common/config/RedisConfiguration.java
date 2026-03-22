@@ -1,4 +1,4 @@
-package me.veselin.probity.config;
+package me.veselin.probity.common.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

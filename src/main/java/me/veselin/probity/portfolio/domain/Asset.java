@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import me.veselin.probity.common.BaseEntityWithActive;
+import me.veselin.probity.common.audit.BaseEntityWithActive;
 import me.veselin.probity.portfolio.enumeration.AssetType;
 import org.hibernate.annotations.SQLRestriction;
 

@@ -1,4 +1,4 @@
-package me.veselin.probity.auth.config;
+package me.veselin.probity.bff.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -7,8 +7,5 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
 public class BeanConfiguration {
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+
 }

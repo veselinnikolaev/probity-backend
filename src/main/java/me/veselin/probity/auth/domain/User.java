@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import me.veselin.probity.common.BaseEntitySoftDelete;
+import me.veselin.probity.common.audit.BaseEntitySoftDelete;
 import me.veselin.probity.auth.enumeration.Role;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLRestriction;
@@ -66,10 +66,6 @@ public class User extends BaseEntitySoftDelete implements Serializable {
         this.username = username != null ? username.trim() : null;
     }
 
-    /**
-     * Elevates this user to ADMIN. Should only be called from an
-     * admin management service with appropriate authorization.
-     */
     public void promoteToAdmin() {
         this.role = Role.ADMIN;
     }

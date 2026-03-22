@@ -1,13 +1,17 @@
-package me.veselin.probity.auth.jwt;
+package me.veselin.probity.bff.security;
 
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.auth.domain.User;
-import me.veselin.probity.auth.service.UserQueryService;
+import me.veselin.probity.auth.enumeration.Token;
+import me.veselin.probity.auth.jwt.JwtService;
+import me.veselin.probity.auth.port.AuthQueryPort;
+import me.veselin.probity.auth.exception.UnauthorizedException;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -25,8 +29,7 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final UserQueryService userQueryService;
-    private  final JwtBlacklistService blacklistService;
+    private final AuthQueryPort authQueryPort;
     private final AuthenticationEntryPoint authenticationEntryPoint;
 
     @Override
@@ -35,14 +38,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
 
-        String authHeader = request.getHeader("Authorization");
+        String token = extractToken(request);
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (token == null) {
             filterChain.doFilter(request, response);
             return;
         }
-
-        String token = authHeader.substring(7);
 
         try {
             String username = jwtService.extractUsername(token);
@@ -51,13 +52,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().getAuthentication() == null) {
 
                 String jti = jwtService.extractJti(token);
-                if (jti == null || blacklistService.isBlacklisted(jti)) {
+                if (jti == null || jwtService.isBlacklisted(jti)) {
                     authenticationEntryPoint.commence(request, response,
                             new InsufficientAuthenticationException("Token has been revoked"));
                     return;
                 }
 
-                User user = userQueryService.getByUsername(username);
+                User user = authQueryPort.getByUsername(username);
 
                 if (jwtService.isTokenValid(token, username)) {
                     UsernamePasswordAuthenticationToken authToken =
@@ -71,13 +72,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
 
-        } catch (JwtException e) {
-            // malformed, expired, invalid signature — all return 401
+        } catch (JwtException | UnauthorizedException e) {
             authenticationEntryPoint.commence(request, response,
-                    new InsufficientAuthenticationException("Invalid token"));
+                    new InsufficientAuthenticationException(e.getMessage()));
             return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String extractToken(HttpServletRequest request) {
+        // 1. try cookie first (browser clients)
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if (Token.ACCESS.getCookieName().equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+
+        // 2. fall back to Authorization header (mobile, service-to-service)
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7);
+        }
+
+        return null;
     }
 }

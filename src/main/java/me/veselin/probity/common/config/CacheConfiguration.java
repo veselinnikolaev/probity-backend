@@ -1,4 +1,4 @@
-package me.veselin.probity.config;
+package me.veselin.probity.common.config;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
