@@ -1,6 +1,6 @@
 version: "1.0"
 
-linter: jetbrains/qodana-jvm:2025.3
+image: jetbrains/qodana-jvm:2025.3
 
 profile:
   name: qodana.recommended
