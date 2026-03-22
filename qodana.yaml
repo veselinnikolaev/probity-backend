@@ -1,9 +1,11 @@
 version: "1.0"
 
+linter: jetbrains/qodana-jvm:2025.3
+
 profile:
   name: qodana.recommended
 
-bootstrap: ./mvnw install -DskipTests
+bootstrap: mvn install -DskipTests
 
 failThreshold: 0
 
