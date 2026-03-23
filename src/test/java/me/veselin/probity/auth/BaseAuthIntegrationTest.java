@@ -27,21 +27,27 @@ public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ObjectMapper objectMapper;
 
+    protected static final String ADMIN_USERNAME = "admin";
+    protected static final String ADMIN_EMAIL = "admin@probity.test";
+    protected static final String ADMIN_PASSWORD = "Password123!";
+
     protected AuthResult login() throws Exception {
         MvcResult result = mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                            {"username": "admin", "password": "Password123!"}
-                            """))
+                        .content(String.format("""
+                                {"identifier": "%s", "password": "%s"}
+                                """, ADMIN_USERNAME, ADMIN_PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String accessToken = getCookieValue(result, Token.ACCESS.getCookieName());
-        String refreshToken = getCookieValue(result, Token.REFRESH.getCookieName());
+        String username = objectMapper.readTree(result.getResponse().getContentAsString())
+                .get("username").asText();
         String role = objectMapper.readTree(result.getResponse().getContentAsString())
                 .get("role").asText();
+        String accessToken = getCookieValue(result, Token.ACCESS.getCookieName());
+        String refreshToken = getCookieValue(result, Token.REFRESH.getCookieName());
 
-        return new AuthResult(accessToken, refreshToken, role);
+        return new AuthResult(username, role, accessToken, refreshToken);
     }
 
     private String getCookieValue(MvcResult result, String name) {
@@ -56,7 +62,7 @@ public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
     @Override
     protected void afterSetUp() {
         try {
-            authCommandPort.register(new RegisterCommand("admin", "admin@probity.test", "Password123!"));
+            authCommandPort.register(new RegisterCommand(ADMIN_USERNAME, ADMIN_EMAIL, ADMIN_PASSWORD));
         } catch (ConflictException ignored) {
         }
     }

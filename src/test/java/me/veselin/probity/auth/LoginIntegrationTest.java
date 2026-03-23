@@ -18,9 +18,9 @@ public class LoginIntegrationTest extends BaseAuthIntegrationTest {
     void login_withValidCredentials_returnsUsernameAndRole() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"username": "admin", "password": "Password123!"}
-                                """))
+                        .content(String.format("""
+                                {"identifier": "%s", "password": "%s"}
+                                """, ADMIN_USERNAME, ADMIN_PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").exists())
                 .andExpect(jsonPath("$.username").isString())
@@ -29,12 +29,24 @@ public class LoginIntegrationTest extends BaseAuthIntegrationTest {
     }
 
     @Test
+    void login_withEmailAsIdentifier_returnsUsernameAndRole() throws Exception {
+        mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(String.format("""
+                                {"identifier": "%s", "password": "%s"}
+                                """, ADMIN_EMAIL, ADMIN_PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("admin"))
+                .andExpect(jsonPath("$.role").exists());
+    }
+
+    @Test
     void login_withWrongPassword_returns401() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"username": "admin", "password": "WrongPass123!"}
-                                """))
+                        .content(String.format("""
+                                {"identifier": "%s", "password": "WrongPass123!"}
+                                """, ADMIN_USERNAME)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Invalid credentials"));
     }
@@ -43,31 +55,31 @@ public class LoginIntegrationTest extends BaseAuthIntegrationTest {
     void login_withNonExistentUser_returns401() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"username": "ghost", "password": "Password123!"}
-                                """))
+                        .content(String.format("""
+                                {"identifier": "ghost", "password": "%s"}
+                                """, ADMIN_PASSWORD)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Invalid credentials"));
     }
 
     @Test
-    void login_withBlankUsername_returns400() throws Exception {
+    void login_withBlankIdentifier_returns400() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"username": "", "password": "Password123!"}
-                                """))
+                        .content(String.format("""
+                                {"identifier": "", "password": "%s"}
+                                """, ADMIN_PASSWORD)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fields.username").exists());
+                .andExpect(jsonPath("$.fields.identifier").exists());
     }
 
     @Test
     void login_withBlankPassword_returns400() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"username": "admin", "password": ""}
-                                """))
+                        .content(String.format("""
+                                {"identifier": "%s", "password": ""}
+                                """, ADMIN_USERNAME)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fields.password").exists());
     }
@@ -85,9 +97,9 @@ public class LoginIntegrationTest extends BaseAuthIntegrationTest {
     void login_withValidCredentials_setsCookies() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                            {"username": "admin", "password": "Password123!"}
-                            """))
+                        .content(String.format("""
+                                {"identifier": "%s", "password": "%s"}
+                                """, ADMIN_USERNAME, ADMIN_PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(cookie().exists(Token.ACCESS.getCookieName()))
                 .andExpect(cookie().httpOnly(Token.ACCESS.getCookieName(), true))

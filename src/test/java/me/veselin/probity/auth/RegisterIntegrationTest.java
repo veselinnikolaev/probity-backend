@@ -14,17 +14,21 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
 
     @Autowired MockMvc mockMvc;
 
+    protected static final String NEW_USER_USERNAME = "newuser";
+    protected static final String NEW_USER_EMAIL = "newuser@probity.test";
+    protected static final String NEW_USER_PASSWORD = "Password123!";
+
     @Test
     void register_withValidData_returns200() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.REGISTER)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(String.format("""
                                 {
-                                    "username": "newuser",
-                                    "email": "newuser@probity.test",
-                                    "password": "Password123!"
+                                    "username": "%s",
+                                    "email": "%s",
+                                    "password": "%s"
                                 }
-                                """))
+                                """, NEW_USER_USERNAME, NEW_USER_EMAIL, NEW_USER_PASSWORD)))
                 .andExpect(status().isCreated());
     }
 
@@ -32,13 +36,13 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
     void register_withDuplicateUsername_returns409() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.REGISTER)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(String.format("""
                                 {
-                                    "username": "admin",
+                                    "username": "%s",
                                     "email": "other@probity.test",
-                                    "password": "Password123!"
+                                    "password": "%s"
                                 }
-                                """))
+                                """, ADMIN_USERNAME, NEW_USER_PASSWORD)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value("Username already taken"));
     }
@@ -47,13 +51,13 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
     void register_withDuplicateEmail_returns409() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.REGISTER)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(String.format("""
                                 {
                                     "username": "otheradmin",
-                                    "email": "admin@probity.test",
-                                    "password": "Password123!"
+                                    "email": "%s",
+                                    "password": "%s"
                                 }
-                                """))
+                                """, ADMIN_EMAIL, NEW_USER_PASSWORD)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value("Email already registered"));
     }
@@ -62,13 +66,13 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
     void register_withInvalidEmail_returns400() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.REGISTER)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(String.format("""
                                 {
-                                    "username": "newuser",
+                                    "username": "%s",
                                     "email": "notanemail",
-                                    "password": "Password123!"
+                                    "password": "%s"
                                 }
-                                """))
+                                """, NEW_USER_USERNAME, NEW_USER_PASSWORD)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fields.email").exists());
     }
@@ -77,13 +81,13 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
     void register_withWeakPassword_returns400() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.REGISTER)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(String.format("""
                                 {
-                                    "username": "newuser",
-                                    "email": "newuser@probity.test",
+                                    "username": "%s",
+                                    "email": "%s",
                                     "password": "weakpassword"
                                 }
-                                """))
+                                """, NEW_USER_USERNAME, NEW_USER_PASSWORD)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fields.password").exists());
     }
@@ -92,13 +96,13 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
     void register_withInvalidUsername_returns400() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.REGISTER)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(String.format("""
                                 {
                                     "username": "invalid user!",
-                                    "email": "newuser@probity.test",
-                                    "password": "Password123!"
+                                    "email": "%s",
+                                    "password": "%s"
                                 }
-                                """))
+                                """, NEW_USER_EMAIL, NEW_USER_PASSWORD)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fields.username").exists());
     }
@@ -107,13 +111,13 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
     void register_withUsernameTooShort_returns400() throws Exception {
         mockMvc.perform(post(ApiRoutes.Auth.REGISTER)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+                        .content(String.format("""
                                 {
                                     "username": "ab",
-                                    "email": "newuser@probity.test",
-                                    "password": "Password123!"
+                                    "email": "%s",
+                                    "password": "%s"
                                 }
-                                """))
+                                """, NEW_USER_EMAIL, NEW_USER_PASSWORD)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fields.username").exists());
     }

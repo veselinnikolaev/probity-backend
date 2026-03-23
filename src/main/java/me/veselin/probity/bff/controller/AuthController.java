@@ -38,7 +38,7 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
                                               HttpServletResponse response) {
         AuthResult result = authCommandPort.login(
-                new LoginCommand(request.username(), request.password())
+                new LoginCommand(request.identifier(), request.password())
         );
 
         response.addHeader(HttpHeaders.SET_COOKIE,
@@ -46,7 +46,7 @@ public class AuthController {
         response.addHeader(HttpHeaders.SET_COOKIE,
                 cookieService.buildRefreshCookie(result.refreshToken()).toString());
 
-        return ResponseEntity.ok(new AuthResponse(request.username(), result.role()));
+        return ResponseEntity.ok(new AuthResponse(result.username(), result.role()));
     }
 
     @PostMapping("/refresh")

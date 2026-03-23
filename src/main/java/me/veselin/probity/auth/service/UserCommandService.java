@@ -25,7 +25,7 @@ public class UserCommandService implements AuthCommandPort {
     private final JwtService jwtService;
 
     public AuthResult login(LoginCommand request) {
-        User user = userRepository.findByUsername(request.username())
+        User user = userRepository.findByUsernameOrEmail(request.identifier(), request.identifier())
                 .orElse(null);
 
         // always run bcrypt even if user not found — prevents timing attacks
@@ -35,18 +35,19 @@ public class UserCommandService implements AuthCommandPort {
             throw new BadCredentialsException("Invalid credentials");
         }
 
+        String username = user.getUsername();
         String role = user.getRole().name();
         String accessToken = jwtService.generateAccessJwt(
-                user.getUsername(),
+                username,
                 Map.of("role", role)
         );
         String refreshToken = jwtService.generateRefreshJwt(
-                user.getUsername(),
+                username,
                 Map.of("role", role)
         );
 
         jwtService.saveRefreshToken(refreshToken);
-        return new AuthResult(accessToken, refreshToken, role);
+        return new AuthResult(username, role, accessToken, refreshToken);
     }
 
     public void register(RegisterCommand request) {
@@ -102,6 +103,6 @@ public class UserCommandService implements AuthCommandPort {
         String newRefreshToken = jwtService.generateRefreshJwt(username, Map.of("role", role));
         jwtService.saveRefreshToken(newRefreshToken);
 
-        return new AuthResult(newAccessToken, newRefreshToken, role);
+        return new AuthResult(username, role, newAccessToken, newRefreshToken);
     }
 }
