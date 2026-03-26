@@ -6,10 +6,13 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.time.Duration;
+import java.util.Objects;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
@@ -23,9 +26,9 @@ public abstract class BaseIntegrationTest {
             .withUsername("test")
             .withPassword("test");
 
-    @ServiceConnection
     static final GenericContainer<?> redis = new GenericContainer<>("redis:7.2.4")
             .withExposedPorts(6379)
+            .withCommand("redis-server", "--requirepass", "test")
             .withStartupTimeout(Duration.ofSeconds(60));
 
     static {
@@ -33,14 +36,23 @@ public abstract class BaseIntegrationTest {
         redis.start();
     }
 
+    @DynamicPropertySource
+    static void redisProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        registry.add("spring.data.redis.password", () -> "test");
+        registry.add("spring.data.redis.database", () -> 1);
+    }
+
     @BeforeEach
     void cleanRedis() {
-        redisTemplate.getConnectionFactory()
+        Objects.requireNonNull(redisTemplate.getConnectionFactory())
                 .getConnection()
                 .serverCommands()
                 .flushDb();
         afterSetUp();
     }
 
-    protected void afterSetUp() {}
+    protected void afterSetUp() {
+    }
 }

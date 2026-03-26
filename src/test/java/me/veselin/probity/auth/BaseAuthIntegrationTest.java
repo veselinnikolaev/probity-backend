@@ -20,12 +20,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
-    @Autowired
-    AuthCommandPort authCommandPort;
-    @Autowired
-    MockMvc mockMvc;
-    @Autowired
-    ObjectMapper objectMapper;
+    @Autowired AuthCommandPort authCommandPort;
+    @Autowired MockMvc mockMvc;
+    @Autowired ObjectMapper objectMapper;
 
     protected static final String ADMIN_USERNAME = "admin";
     protected static final String ADMIN_EMAIL = "admin@probity.test";
@@ -51,8 +48,7 @@ public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
     }
 
     private String getCookieValue(MvcResult result, String name) {
-        return result.getResponse().getCookies() == null ? null :
-                Arrays.stream(result.getResponse().getCookies())
+        return Arrays.stream(result.getResponse().getCookies())
                         .filter(c -> name.equals(c.getName()))
                         .map(Cookie::getValue)
                         .findFirst()
