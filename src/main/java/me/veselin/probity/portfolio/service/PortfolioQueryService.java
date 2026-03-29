@@ -248,11 +248,11 @@ public class PortfolioQueryService {
     }
 
     private double lastOrZero(List<Double> list) {
-        return list.isEmpty() ? 0 : list.get(list.size() - 1);
+        return list.isEmpty() ? 0 : list.getLast();
     }
 
     private double firstOrZero(List<Double> list) {
-        return list.isEmpty() ? 0 : list.get(0);
+        return list.isEmpty() ? 0 : list.getFirst();
     }
 
     private double previousOrCurrent(List<Double> list) {

@@ -31,4 +31,10 @@ public interface PriceBarRepository extends JpaRepository<PriceBar, UUID> {
             @Param("to")     LocalDate to);
 
     boolean existsByTickerAndBarDate(String symbol, LocalDate barDate);
+
+    @Query("SELECT p.barDate FROM PriceBar p WHERE p.ticker = :ticker AND p.barDate BETWEEN :from AND :to")
+    List<LocalDate> findBarDatesByTickerAndBarDateBetween(
+            @Param("ticker") String ticker,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 }

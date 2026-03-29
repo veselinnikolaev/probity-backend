@@ -21,7 +21,7 @@ public class MarketDataService implements MarketDataPort {
     private final MarketDataSyncService syncService;
 
     @Override
-    @Cacheable(value = "latestPrice", key = "#ticker.toUpperCase()")
+    //@Cacheable(value = "latestPrice", key = "#ticker.toUpperCase()")
     public BigDecimal getLatestPrice(String ticker) {
         String upper = ticker.toUpperCase();
         return priceBarRepository
@@ -38,7 +38,7 @@ public class MarketDataService implements MarketDataPort {
     }
 
     @Override
-    @Cacheable(value = "historicalBars", key = "{#ticker.toUpperCase(), #from, #to}")
+    //@Cacheable(value = "historicalBars", key = "{#ticker.toUpperCase(), #from, #to}")
     public List<PriceBar> getHistoricalBars(String ticker, LocalDate from, LocalDate to) {
         String upper = ticker.toUpperCase();
         syncService.ensureDataExists(upper, from, to);
