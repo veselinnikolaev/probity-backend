@@ -1,7 +1,7 @@
 package me.veselin.probity.bff.cookie;
 
 import me.veselin.probity.auth.enumeration.Token;
-import me.veselin.probity.common.ApiRoutes;
+import me.veselin.probity.common.util.ApiRoutes;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Service;

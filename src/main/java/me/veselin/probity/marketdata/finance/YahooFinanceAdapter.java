@@ -1,4 +1,4 @@
-package me.veselin.probity.marketdata.adapter;
+package me.veselin.probity.marketdata.finance;
 
 import me.veselin.probity.marketdata.enumeration.ZoneIdEnumeration;
 import me.veselin.probity.marketdata.dto.PriceBarDto;
@@ -18,22 +18,18 @@ import java.util.List;
 @Component
 public class YahooFinanceAdapter {
 
-    public List<PriceBarDto> fetchDailyBars(String symbol, LocalDate from) {
+    public List<PriceBarDto> fetchDailyBars(String ticker, LocalDate from, LocalDate to) {
         try {
-            Calendar fromCal = Calendar.getInstance();
-            int pastMonth = from.getMonthValue() - 1;
-            fromCal.set(from.getYear(), pastMonth, from.getDayOfMonth());
-
-            Stock stock = YahooFinance.get(symbol, fromCal, Interval.DAILY);
+            Stock stock = YahooFinance.get(ticker, toCalendar(from), toCalendar(to), Interval.DAILY);
 
             if (stock == null || stock.getHistory() == null) {
-                throw new MarketDataException("No data returned for: " + symbol);
+                throw new MarketDataException("No data returned for: " + ticker);
             }
 
             return stock.getHistory().stream()
                     .filter(q -> q.getAdjClose() != null && q.getClose() != null)
                     .map(q -> new PriceBarDto(
-                            symbol,
+                            ticker,
                             toLocalDate(q.getDate()),
                             q.getOpen(),
                             q.getHigh(),
@@ -46,11 +42,21 @@ public class YahooFinanceAdapter {
                     .toList();
 
         } catch (IOException e) {
-            throw new MarketDataException("Failed to fetch data for: " + symbol, e);
+            throw new MarketDataException("Failed to fetch data for: " + ticker, e);
         }
     }
 
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    private Calendar toCalendar(LocalDate date) {
+        Calendar cal = Calendar.getInstance();
+        cal.set(date.getYear(), date.getMonthValue() - 1, date.getDayOfMonth());
+        return cal;
+    }
+
     private LocalDate toLocalDate(Calendar cal) {
-        return cal.toInstant().atZone(ZoneId.of(ZoneIdEnumeration.PARIS.getZoneId())).toLocalDate();
+        return cal.toInstant()
+                .atZone(ZoneId.of(ZoneIdEnumeration.PARIS.getZoneId()))
+                .toLocalDate();
     }
 }

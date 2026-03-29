@@ -6,7 +6,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import me.veselin.probity.common.audit.BaseEntityWithActive;
 import me.veselin.probity.portfolio.enumeration.AssetType;
+import me.veselin.probity.portfolio.enumeration.Sector;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLRestriction;
+import org.hibernate.type.SqlTypes;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,7 +33,13 @@ public class Asset extends BaseEntityWithActive {
     private String name;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(nullable = false)
+    private Sector sector;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(nullable = false)
     private AssetType type;
 
     @OneToMany(mappedBy = "asset", fetch = FetchType.LAZY)
@@ -40,10 +49,11 @@ public class Asset extends BaseEntityWithActive {
     // Factory
     // -------------------------------------------------------------------------
 
-    public static Asset create(String ticker, String name, AssetType type) {
+    public static Asset create(String ticker, String name, Sector sector, AssetType type) {
         Asset asset = new Asset();
         asset.ticker = Objects.requireNonNull(ticker, "ticker must not be null").toUpperCase();
         asset.name   = Objects.requireNonNull(name,   "name must not be null");
+        asset.sector = Objects.requireNonNull(sector, "sector must not be null");
         asset.type   = Objects.requireNonNull(type,   "type must not be null");
         return asset;
     }

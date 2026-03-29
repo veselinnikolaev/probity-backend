@@ -1,53 +1,48 @@
 package me.veselin.probity.marketdata.service;
 
 import lombok.RequiredArgsConstructor;
-import me.veselin.probity.marketdata.adapter.YahooFinanceAdapter;
+import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.marketdata.domain.PriceBar;
-import me.veselin.probity.marketdata.dto.PriceBarDto;
+import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.marketdata.repository.PriceBarRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
-public class MarketDataService {
+public class MarketDataService implements MarketDataPort {
 
-    private final PriceBarRepository priceBarRepository;
-    private final YahooFinanceAdapter yahooAdapter;
+    private final PriceBarRepository  priceBarRepository;
+    private final MarketDataSyncService syncService;
 
-    public List<PriceBar> getBars(String symbol, int daysBack) {
-        LocalDate requiredFrom = LocalDate.now().minusDays(daysBack);
-
-        Optional<PriceBar> latestBar =
-                priceBarRepository.findTopBySymbolOrderByBarDateDesc(symbol);
-
-        boolean isStale = latestBar
-                .map(bar -> bar.getBarDate().isBefore(LocalDate.now().minusDays(1)))
-                .orElse(true);
-
-        if (isStale) {
-            LocalDate fetchFrom = latestBar
-                    .map(bar -> bar.getBarDate().plusDays(1))
-                    .orElse(requiredFrom);
-
-            refreshFromYahoo(symbol, fetchFrom);
-        }
-
-        return priceBarRepository.findBySymbolAndBarDateBetweenOrderByBarDateAsc(
-                symbol, requiredFrom, LocalDate.now()
-        );
+    @Override
+    @Cacheable(value = "latestPrice", key = "#ticker.toUpperCase()")
+    public BigDecimal getLatestPrice(String ticker) {
+        String upper = ticker.toUpperCase();
+        return priceBarRepository
+                .findTopByTickerOrderByBarDateDesc(upper)
+                .map(PriceBar::getAdjClose)
+                .orElseGet(() -> {
+                    // Fetch and save (this internal call won't be cached, which is good)
+                    syncService.syncData(upper, LocalDate.now().minusDays(7), LocalDate.now());
+                    return priceBarRepository
+                            .findTopByTickerOrderByBarDateDesc(upper)
+                            .map(PriceBar::getAdjClose)
+                            .orElse(BigDecimal.ZERO);
+                });
     }
 
-    private void refreshFromYahoo(String symbol, LocalDate from) {
-        List<PriceBarDto> fetched = yahooAdapter.fetchDailyBars(symbol, from);
-
-        List<PriceBar> entities = fetched.stream()
-                .map(PriceBar::from)
-                .toList();
-
-        priceBarRepository.saveAll(entities);
+    @Override
+    @Cacheable(value = "historicalBars", key = "{#ticker.toUpperCase(), #from, #to}")
+    public List<PriceBar> getHistoricalBars(String ticker, LocalDate from, LocalDate to) {
+        String upper = ticker.toUpperCase();
+        syncService.ensureDataExists(upper, from, to);
+        return priceBarRepository
+                .findByTickerAndBarDateBetweenOrderByBarDateAsc(upper, from, to);
     }
 }

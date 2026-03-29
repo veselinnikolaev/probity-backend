@@ -1,4 +1,4 @@
-package me.veselin.probity.common;
+package me.veselin.probity.common.util;
 
 public final class ApiRoutes {
 
@@ -18,5 +18,15 @@ public final class ApiRoutes {
     public static final class Users {
         public static final String ROOT = V1 + "/users";
         public static final String ME   = ROOT + "/me";
+    }
+
+    public static final class Portfolios {
+        public static final String PORTFOLIOS = V1 + "/portfolios";
+        public static final String PORTFOLIO = PORTFOLIOS + "/{id}"  ;
+        public static final String VOLATILITY = PORTFOLIO + "/volatility";
+        public static final String ALERTS = PORTFOLIO + "/alerts";
+        public static final String COMPOSITION = PORTFOLIO + "/composition";
+        public static final String SUMMARY = PORTFOLIO + "/summary";
+        public static final String POSITIONS = PORTFOLIO + "/positions";
     }
 }

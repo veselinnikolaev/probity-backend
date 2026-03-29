@@ -12,7 +12,7 @@ import me.veselin.probity.bff.dto.LoginRequest;
 import me.veselin.probity.bff.dto.RegisterRequest;
 import me.veselin.probity.auth.dto.AuthResult;
 import me.veselin.probity.auth.port.AuthCommandPort;
-import me.veselin.probity.common.ApiRoutes;
+import me.veselin.probity.common.util.ApiRoutes;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

@@ -7,7 +7,7 @@ import me.veselin.probity.auth.dto.RegisterCommand;
 import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.auth.port.AuthCommandPort;
 import me.veselin.probity.auth.dto.AuthResult;
-import me.veselin.probity.common.ApiRoutes;
+import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.common.exception.ConflictException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;

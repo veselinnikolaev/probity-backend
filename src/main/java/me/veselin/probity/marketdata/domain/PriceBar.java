@@ -7,6 +7,7 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import me.veselin.probity.common.audit.BaseEntitySoftDelete;
 import me.veselin.probity.marketdata.dto.PriceBarDto;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -15,12 +16,13 @@ import java.util.Objects;
 
 @Entity
 @Table(name = "price_bars",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"symbol", "bar_date"}))
+        uniqueConstraints = @UniqueConstraint(columnNames = {"ticker", "bar_date"}))
 @Getter
+@SQLRestriction("deleted = false")
 public class PriceBar extends BaseEntitySoftDelete {
 
     @Column(nullable = false, length = 20)
-    private String symbol;
+    private String ticker;
 
     @Column(name = "bar_date", nullable = false)
     private LocalDate barDate;
@@ -48,17 +50,22 @@ public class PriceBar extends BaseEntitySoftDelete {
 
     public static PriceBar from(PriceBarDto dto) {
         Objects.requireNonNull(dto, "PriceBarDto must not be null");
+        return PriceBar.from(dto.ticker(), dto.barDate(), dto.open(), dto.high(), dto.low(), dto.close(), dto.adjClose(), dto.volume());
+    }
+
+    public static PriceBar from(String ticker, LocalDate barDate, BigDecimal open, BigDecimal high, BigDecimal low, BigDecimal close, BigDecimal adjClose, Long volume) {
         PriceBar bar = new PriceBar();
-        bar.symbol = dto.symbol();
-        bar.barDate = dto.barDate();
-        bar.open = dto.open();
-        bar.high = dto.high();
-        bar.low = dto.low();
-        bar.close = dto.close();
-        bar.adjClose = dto.adjClose();
-        bar.volume = dto.volume();
+        bar.ticker = ticker;
+        bar.barDate = barDate;
+        bar.open = open;
+        bar.high = high;
+        bar.low = low;
+        bar.close = close;
+        bar.adjClose = adjClose;
+        bar.volume = volume;
         return bar;
     }
+
 
     // -------------------------------------------------------------------------
     // Domain behaviour
@@ -110,7 +117,7 @@ public class PriceBar extends BaseEntitySoftDelete {
     private void validateAdjClose() {
         if (adjClose == null) {
             throw new IllegalStateException(
-                    "adjClose is null for bar: " + symbol + " on " + barDate
+                    "adjClose is null for bar: " + ticker + " on " + barDate
             );
         }
     }
@@ -133,7 +140,7 @@ public class PriceBar extends BaseEntitySoftDelete {
 
     @Override
     public String toString() {
-        return "PriceBar{symbol='%s', date=%s, adjClose=%s}"
-                .formatted(symbol, barDate, adjClose);
+        return "PriceBar{ticker='%s', date=%s, adjClose=%s}"
+                .formatted(ticker, barDate, adjClose);
     }
 }

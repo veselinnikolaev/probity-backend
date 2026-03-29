@@ -1,6 +1,6 @@
 package me.veselin.probity.auth;
 
-import me.veselin.probity.common.ApiRoutes;
+import me.veselin.probity.common.util.ApiRoutes;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;

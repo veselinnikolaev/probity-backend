@@ -34,7 +34,7 @@ public class User extends BaseEntitySoftDelete implements Serializable {
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false)
     private Role role;
 
     // -------------------------------------------------------------------------

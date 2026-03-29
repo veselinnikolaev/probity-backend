@@ -12,6 +12,7 @@ import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.auth.jwt.JwtService;
 import me.veselin.probity.auth.port.AuthQueryPort;
 import me.veselin.probity.auth.exception.UnauthorizedException;
+import me.veselin.probity.bff.dto.UserPrincipal;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -60,10 +61,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 User user = authQueryPort.getByUsername(username);
 
+                UserPrincipal principal = new UserPrincipal(
+                        user.getId(),
+                        user.getUsername(),
+                        user.getRole().name()
+                );
+
                 if (jwtService.isTokenValid(token, username)) {
                     UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(
-                                    user,
+                                    principal,
                                     null,
                                     List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
                             );

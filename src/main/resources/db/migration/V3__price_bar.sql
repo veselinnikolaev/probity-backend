@@ -2,7 +2,7 @@ CREATE TABLE price_bars
 (
     id         UUID PRIMARY KEY,
 
-    symbol     VARCHAR(20) NOT NULL,
+    ticker     VARCHAR(20) NOT NULL,
     bar_date   DATE        NOT NULL,
 
     open       NUMERIC(19, 4),
@@ -24,6 +24,6 @@ CREATE TABLE price_bars
     -- Optimistic locking
     version    BIGINT      NOT NULL DEFAULT 0,
 
-    -- One bar per symbol per day
-    CONSTRAINT uq_price_bars_symbol_date UNIQUE (symbol, bar_date)
+    -- One bar per ticker per day
+    CONSTRAINT uq_price_bars_symbol_date UNIQUE (ticker, bar_date)
 );

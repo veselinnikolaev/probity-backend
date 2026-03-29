@@ -2,8 +2,12 @@ package me.veselin.probity.common.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import me.veselin.probity.auth.exception.UnauthorizedException;
+import me.veselin.probity.marketdata.exception.MarketDataException;
+import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
+import me.veselin.probity.portfolio.exception.PositionNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
@@ -42,6 +46,17 @@ public class GlobalExceptionHandler {
         ));
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<?> handleBadRequest(IllegalArgumentException ex,
+                                              HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(Map.of(
+                "status", 400,
+                "error", "Invalid request input",
+                "path", HtmlUtils.htmlEscape(request.getRequestURI()),
+                "timestamp", Instant.now()
+        ));
+    }
+
     // ── 401 ───────────────────────────────────────────────────────────────────
 
     @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class, UnauthorizedException.class})
@@ -49,6 +64,32 @@ public class GlobalExceptionHandler {
                                                 HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
                 "status", 401,
+                "error", ex.getMessage(),
+                "path", HtmlUtils.htmlEscape(request.getRequestURI()),
+                "timestamp", Instant.now()
+        ));
+    }
+
+    // ── 403 ───────────────────────────────────────────────────────────────────
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<?> handleForbidden(Exception ex,
+                                             HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                "status", 403,
+                "error", "Access denied",
+                "path", HtmlUtils.htmlEscape(request.getRequestURI()),
+                "timestamp", Instant.now()
+        ));
+    }
+
+    // ── 404 ───────────────────────────────────────────────────────────────────
+
+    @ExceptionHandler({PortfolioNotFoundException.class, PositionNotFoundException.class})
+    public ResponseEntity<?> handleNotFound(RuntimeException ex,
+                                            HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
+                "status", 404,
                 "error", ex.getMessage(),
                 "path", HtmlUtils.htmlEscape(request.getRequestURI()),
                 "timestamp", Instant.now()
@@ -75,7 +116,20 @@ public class GlobalExceptionHandler {
                                            HttpServletRequest request) {
         return ResponseEntity.internalServerError().body(Map.of(
                 "status", 500,
-                "error", "An unexpected error occurred",
+                "error", ex.getMessage(),
+                "path", HtmlUtils.htmlEscape(request.getRequestURI()),
+                "timestamp", Instant.now()
+        ));
+    }
+
+    // ── 502 ───────────────────────────────────────────────────────────────────
+
+    @ExceptionHandler(MarketDataException.class)
+    public ResponseEntity<?> handleMarketData(MarketDataException ex,
+                                              HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
+                "status", 502,
+                "error", ex.getMessage(),
                 "path", HtmlUtils.htmlEscape(request.getRequestURI()),
                 "timestamp", Instant.now()
         ));

@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record PriceBarDto(
-        String symbol,
+        String ticker,
         LocalDate barDate,
         BigDecimal open,
         BigDecimal high,
