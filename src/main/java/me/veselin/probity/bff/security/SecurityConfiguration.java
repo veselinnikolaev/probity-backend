@@ -43,7 +43,8 @@ public class SecurityConfiguration {
                                 ApiRoutes.Auth.LOGIN,
                                 ApiRoutes.Auth.REGISTER,
                                 ApiRoutes.Auth.REFRESH,
-                                ApiRoutes.Auth.LOGOUT
+                                ApiRoutes.Auth.LOGOUT,
+                                "/error"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

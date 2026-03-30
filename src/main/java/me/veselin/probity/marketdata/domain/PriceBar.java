@@ -55,7 +55,7 @@ public class PriceBar extends BaseEntitySoftDelete {
 
     public static PriceBar from(String ticker, LocalDate barDate, BigDecimal open, BigDecimal high, BigDecimal low, BigDecimal close, BigDecimal adjClose, Long volume) {
         PriceBar bar = new PriceBar();
-        bar.ticker = ticker;
+        bar.ticker = ticker.toUpperCase();
         bar.barDate = barDate;
         bar.open = open;
         bar.high = high;
