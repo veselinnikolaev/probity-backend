@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -87,7 +88,13 @@ public class PortfolioQueryService {
 
         double vol    = riskPort.annualisedVolatility(dailyReturns);
         double sharpe = riskPort.sharpeRatio(dailyReturns);
-        double var95  = riskPort.var95(currentValue, dailyReturns);
+        // Calculate daily VaR percentage
+        double dailyVarPct = riskPort.var95(currentValue, dailyReturns);
+
+        // Scale by the square root of the number of days in the range
+        // This prevents the -230% explosion while remaining mathematically sound
+        long daysInRange = ChronoUnit.DAYS.between(from, to);
+        double var95 = dailyVarPct * Math.sqrt(daysInRange);
 
         // Delta metrics — compare second half of period against first half.
         int mid = dailyReturns.size() / 2;

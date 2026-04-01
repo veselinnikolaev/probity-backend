@@ -31,19 +31,28 @@ public class RiskCalculator implements RiskPort {
     @Override
     public double sharpeRatio(List<Double> dailyReturns) {
         if (dailyReturns.size() < 2) return 0.0;
-        double riskFreeDaily = riskFreeRate / TRADING_DAYS;
+
         double mean = mean(dailyReturns);
         double stdDev = Math.sqrt(variance(dailyReturns, mean));
         if (stdDev == 0) return 0.0;
+
+        // Convert annual RF to daily
+        double riskFreeDaily = riskFreeRate / TRADING_DAYS;
+
+        // Calculate Daily Sharpe, then annualize it
         return ((mean - riskFreeDaily) / stdDev) * Math.sqrt(TRADING_DAYS);
     }
 
     @Override
     public double var95(double portfolioValue, List<Double> dailyReturns) {
         if (dailyReturns.size() < 2) return 0.0;
+
         double mean = mean(dailyReturns);
         double stdDev = Math.sqrt(variance(dailyReturns, mean));
-        return portfolioValue * Z_95 * stdDev;
+
+        // Logic: (Z-Score * Standard Deviation) * 100
+        // This returns e.g. 2.5 for a 2.5% VaR
+        return Z_95 * stdDev * 100;
     }
 
     @Override
