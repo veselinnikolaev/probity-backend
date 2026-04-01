@@ -27,6 +27,7 @@ public class PortfolioController {
     public ResponseEntity<PortfolioSummaryDto> getSummary(
             @PathVariable String id,
             @RequestParam(defaultValue = "90d") String range) {
+        System.out.println(range);
         return ResponseEntity.ok(portfolioQueryService.getSummary(id, range));
     }
 

@@ -15,5 +15,4 @@ public enum ZoneIdEnumeration {
     ZoneIdEnumeration(String zoneId) {
         this.zoneId = zoneId;
     }
-
 }

@@ -10,58 +10,111 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class PortfolioValuationService {
+
     private final MarketDataPort marketDataPort;
+
+    // ── Price fetching ───────────────────────────────────────────────────────
+
+    /**
+     * Fetches the latest price for every distinct ticker in the portfolio.
+     * Returns a map of ticker → price. Tickers that fail return 0.0 and are
+     * logged — callers must treat 0.0 as "price unavailable", not a real value.
+     */
+    public Map<String, Double> fetchLatestPrices(List<PortfolioPosition> positions) {
+        return positions.stream()
+                .map(pos -> pos.getAsset().getTicker())
+                .distinct()
+                .collect(Collectors.toMap(
+                        ticker -> ticker,
+                        ticker -> {
+                            try {
+                                return marketDataPort.getLatestPrice(ticker).doubleValue();
+                            } catch (Exception e) {
+                                log.error("Failed to fetch latest price ticker={}", ticker, e);
+                                return 0.0;
+                            }
+                        }
+                ));
+    }
+
+    /**
+     * Fetches historical bars for every distinct ticker over [from, to].
+     * Tickers with no data are omitted from the result map entirely rather
+     * than included with an empty list — callers should use getOrDefault.
+     */
+    public Map<String, List<PriceBar>> fetchBars(
+            List<PortfolioPosition> positions, LocalDate from, LocalDate to) {
+
+        Map<String, List<PriceBar>> result = new LinkedHashMap<>();
+
+        for (PortfolioPosition pos : positions) {
+            String ticker = pos.getAsset().getTicker();
+            if (result.containsKey(ticker)) continue; // deduplicate
+
+            try {
+                List<PriceBar> bars = marketDataPort.getHistoricalBars(ticker, from, to);
+                if (bars != null && !bars.isEmpty()) {
+                    result.put(ticker, bars);
+                } else {
+                    log.warn("No bars returned for ticker={} range={} - {}", ticker, from, to);
+                }
+            } catch (Exception e) {
+                log.error("Failed to fetch bars ticker={} range={} - {}", ticker, from, to, e);
+            }
+        }
+
+        return result;
+    }
 
     // ── Total Value ──────────────────────────────────────────────────────────
 
-    public double computeTotalValue(Portfolio portfolio) {
-        log.debug("Computing total portfolio value, positions={}", portfolio.getPositions().size());
+    /**
+     * Computes total portfolio value from a pre-fetched price map.
+     * Accepts the map rather than fetching internally so callers can reuse
+     * a single fetch pass across multiple valuation calls.
+     */
+    public double computeTotalValue(
+            List<PortfolioPosition> positions, Map<String, Double> priceByTicker) {
 
-        return portfolio.getPositions().stream().mapToDouble(pos -> {
-            String ticker = pos.getAsset().getTicker();
-
-            try {
-                double price = marketDataPort.getLatestPrice(ticker).doubleValue();
-                return price * pos.getQuantity().doubleValue();
-            } catch (Exception e) {
-                log.error("Failed to fetch latest price for ticker={}", ticker, e);
-                return 0.0;
-            }
-
+        return positions.stream().mapToDouble(pos -> {
+            double price = priceByTicker.getOrDefault(pos.getAsset().getTicker(), 0.0);
+            return price * pos.getQuantity().doubleValue();
         }).sum();
+    }
+
+    /**
+     * Convenience overload for callers that don't have a pre-fetched price map.
+     * Fetches prices internally — avoid in hot paths where multiple calls share
+     * the same portfolio (e.g. getPortfolios iterating many portfolios).
+     */
+    public double computeTotalValue(Portfolio portfolio) {
+        Map<String, Double> prices = fetchLatestPrices(portfolio.getPositions());
+        return computeTotalValue(portfolio.getPositions(), prices);
     }
 
     // ── Value Series ─────────────────────────────────────────────────────────
 
+    /**
+     * Builds a date-ordered map of total portfolio value per trading day.
+     * Accepts pre-fetched bars — call fetchBars first and pass the result here.
+     */
     public Map<LocalDate, Double> buildValueSeries(
-            List<PortfolioPosition> positions, LocalDate from, LocalDate to) {
-
-        log.debug("Building value series for {} positions, range={} - {}", positions.size(), from, to);
+            List<PortfolioPosition> positions,
+            Map<String, List<PriceBar>> barsByTicker) {
 
         Map<LocalDate, Double> valueByDate = new TreeMap<>();
 
         for (PortfolioPosition pos : positions) {
             String ticker = pos.getAsset().getTicker();
+            List<PriceBar> bars = barsByTicker.get(ticker);
 
-            List<PriceBar> bars;
-            try {
-                bars = marketDataPort.getHistoricalBars(ticker, from, to);
-            } catch (Exception e) {
-                log.error("Failed to fetch historical bars for ticker={}", ticker, e);
-                continue;
-            }
-
-            if (bars == null || bars.isEmpty()) {
-                log.warn("No historical data for ticker={} in range {} - {}", ticker, from, to);
-                continue;
-            }
-
-            log.trace("Bars fetched for ticker={} count={}", ticker, bars.size());
+            if (bars == null) continue;
 
             double qty = pos.getQuantity().doubleValue();
 
@@ -77,90 +130,130 @@ public class PortfolioValuationService {
         return valueByDate;
     }
 
-    // ── Daily Returns ────────────────────────────────────────────────────────
-
-    public List<Double> buildDailyReturns(
+    /**
+     * Convenience overload that fetches bars internally.
+     * Prefer the map-accepting overload when bars are already available.
+     */
+    public Map<LocalDate, Double> buildValueSeries(
             List<PortfolioPosition> positions, LocalDate from, LocalDate to) {
 
-        log.debug("Building daily returns for {} positions, range={} - {}", positions.size(), from, to);
+        return buildValueSeries(positions, fetchBars(positions, from, to));
+    }
 
-        Map<String, List<PriceBar>> barsByTicker = new LinkedHashMap<>();
+    // ── Daily Returns ────────────────────────────────────────────────────────
 
-        // Fetch bars
-        for (PortfolioPosition pos : positions) {
-            String ticker = pos.getAsset().getTicker();
-
-            try {
-                List<PriceBar> bars = marketDataPort.getHistoricalBars(ticker, from, to);
-
-                if (bars == null || bars.size() < 2) {
-                    log.warn("Insufficient bars for ticker={} (size={})", ticker,
-                            bars == null ? 0 : bars.size());
-                    continue;
-                }
-
-                barsByTicker.put(ticker, bars);
-
-            } catch (Exception e) {
-                log.error("Failed to fetch bars for ticker={}", ticker, e);
-            }
-        }
+    /**
+     * Computes daily portfolio returns aligned by date.
+     *
+     * <p>Aligns series by date rather than by index to avoid cross-ticker
+     * misalignment when tickers have different holiday gaps. Only dates
+     * present in ALL included tickers contribute to the return calculation —
+     * this ensures each day's weighted return is computed on a consistent
+     * cross-section of the portfolio.
+     *
+     * <p>Accepts pre-fetched bars — call fetchBars first and pass the result here.
+     */
+    public List<Double> buildDailyReturns(
+            List<PortfolioPosition> positions,
+            Map<String, List<PriceBar>> barsByTicker) {
 
         if (barsByTicker.isEmpty()) {
-            log.warn("No valid bar data available for return calculation");
+            log.warn("No bar data available for return calculation");
             return List.of();
         }
 
-        int len = barsByTicker.values().stream()
-                .mapToInt(List::size)
-                .min()
-                .orElse(0);
+        // Build per-ticker date→bar lookup for O(1) date access.
+        Map<String, Map<LocalDate, PriceBar>> barMapByTicker = new LinkedHashMap<>();
 
-        if (len < 2) {
-            log.warn("Not enough aligned data points for return calculation");
+        for (Map.Entry<String, List<PriceBar>> entry : barsByTicker.entrySet()) {
+            if (entry.getValue().size() < 2) {
+                log.warn("Insufficient bars for ticker={} ({}), excluding from returns",
+                        entry.getKey(), entry.getValue().size());
+                continue;
+            }
+            Map<LocalDate, PriceBar> dateMap = new LinkedHashMap<>();
+            for (PriceBar bar : entry.getValue()) {
+                dateMap.put(bar.getBarDate(), bar);
+            }
+            barMapByTicker.put(entry.getKey(), dateMap);
+        }
+
+        if (barMapByTicker.isEmpty()) return List.of();
+
+        // Intersection of all dates so every return is computed on the same day
+        // across all tickers — eliminates cross-ticker date misalignment.
+        Set<LocalDate> commonDates = null;
+        for (Map<LocalDate, PriceBar> dateMap : barMapByTicker.values()) {
+            if (commonDates == null) {
+                commonDates = new TreeSet<>(dateMap.keySet());
+            } else {
+                commonDates.retainAll(dateMap.keySet());
+            }
+        }
+
+        if (commonDates == null || commonDates.size() < 2) {
+            log.warn("Fewer than 2 common trading days across tickers — cannot compute returns");
             return List.of();
         }
 
-        List<Double> portfolioReturns = new ArrayList<>(len - 1);
+        List<LocalDate> sortedDates = new ArrayList<>(commonDates);
+        List<Double> portfolioReturns = new ArrayList<>(sortedDates.size() - 1);
 
-        for (int i = 1; i < len; i++) {
-            double weightedReturn = 0;
-            double totalValue = 0;
+        for (int i = 1; i < sortedDates.size(); i++) {
+            LocalDate prevDate = sortedDates.get(i - 1);
+            LocalDate currDate = sortedDates.get(i);
 
-            // total portfolio value at t-1
+            double totalPrevValue = 0.0;
+
+            // First pass: total portfolio value at t-1 for weight computation.
             for (PortfolioPosition pos : positions) {
-                List<PriceBar> bars = barsByTicker.get(pos.getAsset().getTicker());
-                if (bars == null) continue;
+                Map<LocalDate, PriceBar> dateMap =
+                        barMapByTicker.get(pos.getAsset().getTicker());
+                if (dateMap == null) continue;
 
-                double qty = pos.getQuantity().doubleValue();
-                double prev = bars.get(i - 1).getAdjClose().doubleValue();
-                totalValue += prev * qty;
+                PriceBar prev = dateMap.get(prevDate);
+                if (prev == null) continue;
+
+                totalPrevValue += prev.getAdjClose().doubleValue()
+                        * pos.getQuantity().doubleValue();
             }
 
-            if (totalValue == 0) {
-                log.warn("Total portfolio value is zero at index={}", i);
+            if (totalPrevValue == 0.0) {
+                log.warn("Zero portfolio value on date={}, skipping", prevDate);
                 portfolioReturns.add(0.0);
                 continue;
             }
 
-            // weighted returns
+            // Second pass: weighted return for this day.
+            double weightedReturn = 0.0;
+
             for (PortfolioPosition pos : positions) {
-                List<PriceBar> bars = barsByTicker.get(pos.getAsset().getTicker());
-                if (bars == null) continue;
+                Map<LocalDate, PriceBar> dateMap =
+                        barMapByTicker.get(pos.getAsset().getTicker());
+                if (dateMap == null) continue;
 
-                double qty = pos.getQuantity().doubleValue();
+                PriceBar prev = dateMap.get(prevDate);
+                PriceBar curr = dateMap.get(currDate);
+                if (prev == null || curr == null) continue;
 
-                double weight =
-                        (bars.get(i - 1).getAdjClose().doubleValue() * qty) / totalValue;
+                double posWeight = (prev.getAdjClose().doubleValue()
+                        * pos.getQuantity().doubleValue()) / totalPrevValue;
 
-                double ret = bars.get(i).dailyReturn(bars.get(i - 1));
-
-                weightedReturn += weight * ret;
+                weightedReturn += posWeight * curr.dailyReturn(prev);
             }
 
             portfolioReturns.add(weightedReturn);
         }
 
         return portfolioReturns;
+    }
+
+    /**
+     * Convenience overload that fetches bars internally.
+     */
+    public List<Double> buildDailyReturns(
+            List<PortfolioPosition> positions, LocalDate from, LocalDate to) {
+
+        return buildDailyReturns(positions, fetchBars(positions, from, to));
     }
 }

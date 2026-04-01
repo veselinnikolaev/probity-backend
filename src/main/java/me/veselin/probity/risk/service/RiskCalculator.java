@@ -16,14 +16,14 @@ public class RiskCalculator implements RiskPort {
     private double riskFreeRate;   // annualised, e.g. 0.045 = 4.5%
 
     private static final double TRADING_DAYS = 252.0;
-    private static final double Z_95         = 1.645;
+    private static final double Z_95 = 1.645;
 
     // ── RiskPort ─────────────────────────────────────────────────────────────
 
     @Override
     public double annualisedVolatility(List<Double> dailyReturns) {
         if (dailyReturns.size() < 2) return 0.0;
-        double mean     = mean(dailyReturns);
+        double mean = mean(dailyReturns);
         double variance = variance(dailyReturns, mean);
         return Math.sqrt(variance) * Math.sqrt(TRADING_DAYS) * 100; // as percentage
     }
@@ -32,8 +32,8 @@ public class RiskCalculator implements RiskPort {
     public double sharpeRatio(List<Double> dailyReturns) {
         if (dailyReturns.size() < 2) return 0.0;
         double riskFreeDaily = riskFreeRate / TRADING_DAYS;
-        double mean          = mean(dailyReturns);
-        double stdDev        = Math.sqrt(variance(dailyReturns, mean));
+        double mean = mean(dailyReturns);
+        double stdDev = Math.sqrt(variance(dailyReturns, mean));
         if (stdDev == 0) return 0.0;
         return ((mean - riskFreeDaily) / stdDev) * Math.sqrt(TRADING_DAYS);
     }
@@ -41,8 +41,8 @@ public class RiskCalculator implements RiskPort {
     @Override
     public double var95(double portfolioValue, List<Double> dailyReturns) {
         if (dailyReturns.size() < 2) return 0.0;
-        double mean    = mean(dailyReturns);
-        double stdDev  = Math.sqrt(variance(dailyReturns, mean));
+        double mean = mean(dailyReturns);
+        double stdDev = Math.sqrt(variance(dailyReturns, mean));
         return portfolioValue * Z_95 * stdDev;
     }
 
@@ -51,7 +51,7 @@ public class RiskCalculator implements RiskPort {
         List<Double> returns = toDailyReturns(priceSeries);
         var result = new ArrayList<Double>(returns.size());
         for (int i = 0; i < returns.size(); i++) {
-            int from  = Math.max(0, i - windowDays + 1);
+            int from = Math.max(0, i - windowDays + 1);
             List<Double> window = returns.subList(from, i + 1);
             result.add(annualisedVolatility(window));
         }

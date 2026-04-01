@@ -12,91 +12,52 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class MarketDataSyncService {
-
     private final PriceBarRepository repository;
     private final FinanceAdapter financeAdapter;
 
-    // One lock object per ticker symbol
-    private final ConcurrentHashMap<String, Object> tickerLocks = new ConcurrentHashMap<>();
-
+    /**
+     * Fetches bars from the remote adapter and persists any that are not already
+     * in the database. Each invocation runs in its own transaction so that a
+     * failure in one gap does not roll back a previously committed gap.
+     *
+     * <p>An empty result from the adapter is logged as a warning but is not
+     * treated as an error — it is a normal outcome for date ranges that consist
+     * entirely of market holidays (e.g. a range of [Jan 1, Jan 1]).
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void syncData(String ticker, LocalDate from, LocalDate to) {
-        log.debug("Syncing data ticker={} range={} - {}", ticker, from, to);
-
-        Object lock = tickerLocks.computeIfAbsent(ticker, k -> new Object());
-
-        synchronized (lock) {
-            Optional<LocalDate> latestInDb = repository.findMaxBarDate(ticker, from, to);
-
-            LocalDate fetchFrom = latestInDb
-                    .map(latest -> latest.plusDays(1))
-                    .orElse(from);
-
-            if (fetchFrom.isAfter(to)) {
-                log.debug("No sync needed for ticker={} (already up-to-date)", ticker);
-                return;
-            }
-
-            log.debug("Fetching missing data for ticker={} from {} to {}", ticker, fetchFrom, to);
-            fetchAndPersist(ticker, fetchFrom, to);
-        }
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void ensureDataExists(String ticker, LocalDate from, LocalDate to) {
-        log.debug("Ensuring data exists ticker={} range={} - {}", ticker, from, to);
-
-        Object lock = tickerLocks.computeIfAbsent(ticker, k -> new Object());
-
-        synchronized (lock) {
-            Optional<LocalDate> latestInDb = repository.findMaxBarDate(ticker, from, to);
-
-            LocalDate fetchFrom = latestInDb
-                    .map(latest -> latest.plusDays(1))
-                    .orElse(from);
-
-            if (fetchFrom.isAfter(to)) {
-                log.trace("Data already complete for ticker={}", ticker);
-                return;
-            }
-
-            log.debug("Gap-filling ticker={} from {} to {}", ticker, fetchFrom, to);
-            fetchAndPersist(ticker, fetchFrom, to);
-        }
-    }
-
-    private void fetchAndPersist(String symbol, LocalDate from, LocalDate to) {
-        log.debug("Fetching bars from external API ticker={} range={} - {}", symbol, from, to);
+    protected void fetchAndPersist(String ticker, LocalDate from, LocalDate to) {
+        log.debug("Fetching bars from adapter ticker={} range={} - {}", ticker, from, to);
 
         List<PriceBarDto> bars;
-
         try {
-            bars = financeAdapter.fetchDailyBars(symbol, from, to);
+            bars = financeAdapter.fetchDailyBars(ticker, from, to);
         } catch (Exception e) {
-            log.error("Failed to fetch bars from adapter for ticker={}", symbol, e);
+            log.error("Adapter call failed for ticker={} range={} - {}", ticker, from, to, e);
             return;
         }
 
         if (bars == null || bars.isEmpty()) {
-            log.warn("No data returned from adapter for ticker={} range={} - {}", symbol, from, to);
+            // Normal for holiday-only ranges (e.g. New Year's Day).
+            // The gap detection in ensureDataExists will not re-attempt this range
+            // because the clamp and boundary logic already exclude future dates,
+            // and a holiday in the middle of a larger range is not re-fetched in
+            // isolation — only the boundary gaps are.
+            log.debug("No bars returned from adapter for ticker={} range={} - {} (holiday range?)", ticker, from, to);
             return;
         }
-
-        log.trace("Fetched {} bars from adapter for ticker={}", bars.size(), symbol);
 
         Set<LocalDate> existingDates;
         try {
             existingDates = new HashSet<>(
-                    repository.findBarDatesByTickerAndBarDateBetween(symbol, from, to)
+                    repository.findBarDatesByTickerAndBarDateBetween(ticker, from, to)
             );
         } catch (Exception e) {
-            log.error("Failed to fetch existing dates for ticker={}", symbol, e);
+            log.error("Failed to load existing dates for ticker={}", ticker, e);
             return;
         }
 
@@ -108,15 +69,15 @@ public class MarketDataSyncService {
                 .toList();
 
         if (toSave.isEmpty()) {
-            log.debug("No new bars to persist for ticker={}", symbol);
+            log.debug("All fetched bars already exist in DB for ticker={} range={} - {}", ticker, from, to);
             return;
         }
 
         try {
             repository.saveAllAndFlush(toSave);
-            log.info("Persisted {} new bars for ticker={}", toSave.size(), symbol);
+            log.info("Persisted {} bars for ticker={} range={} - {}", toSave.size(), ticker, from, to);
         } catch (Exception e) {
-            log.error("Failed to persist bars for ticker={}", symbol, e);
+            log.error("Failed to persist bars for ticker={} range={} - {}", ticker, from, to, e);
         }
     }
 }
