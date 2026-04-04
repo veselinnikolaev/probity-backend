@@ -51,20 +51,19 @@ public class RiskCalculator implements RiskPort {
         double stdDev = Math.sqrt(variance(dailyReturns, mean));
 
         // Logic: (Z-Score * Standard Deviation) * 100
-        // This returns e.g. 2.5 for a 2.5% VaR
         return Z_95 * stdDev * 100;
     }
 
     @Override
     public List<Double> rollingVolatility(List<Double> priceSeries, int windowDays) {
         List<Double> returns = toDailyReturns(priceSeries);
-        var result = new ArrayList<Double>(returns.size());
-        for (int i = 0; i < returns.size(); i++) {
-            int from = Math.max(0, i - windowDays + 1);
-            List<Double> window = returns.subList(from, i + 1);
-            result.add(annualisedVolatility(window));
-        }
-        return result;
+        return calculateRollingVolatility(returns, windowDays);
+    }
+
+    // RiskCalculator
+    @Override
+    public List<Double> rollingVolatilityFromReturns(List<Double> dailyReturns, int windowDays) {
+        return calculateRollingVolatility(dailyReturns, windowDays);
     }
 
     @Override
@@ -82,7 +81,9 @@ public class RiskCalculator implements RiskPort {
     @Override
     public int riskScore(String assetType, double annualisedVol) {
         int base = AssetType.valueOf(assetType.toUpperCase()).getBaseRiskScore();
-        int volAddon = (int) Math.max(0, (annualisedVol - 15) / 10 * 5);
+        int volAddon = annualisedVol <= 15
+                ? (int)(annualisedVol / 15.0 * 5)          // 0–5 pts for 0–15% vol
+                : (int)(5 + (annualisedVol - 15) / 10 * 5); // 5+ pts above 15%
         return Math.min(100, base + volAddon);
     }
 
@@ -105,5 +106,15 @@ public class RiskCalculator implements RiskPort {
 
     double stdDev(List<Double> values) {
         return Math.sqrt(variance(values, mean(values)));
+    }
+
+    private List<Double> calculateRollingVolatility(List<Double> dailyReturns, int windowDays) {
+        var result = new ArrayList<Double>(dailyReturns.size());
+        for (int i = 0; i < dailyReturns.size(); i++) {
+            int from = Math.max(0, i - windowDays + 1);
+            List<Double> window = dailyReturns.subList(from, i + 1);
+            result.add(annualisedVolatility(window));
+        }
+        return result;
     }
 }

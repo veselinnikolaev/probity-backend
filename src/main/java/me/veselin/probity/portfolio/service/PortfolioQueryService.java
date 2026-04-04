@@ -18,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -29,6 +28,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PortfolioQueryService {
 
+    private static final int MIN_RETURNS_FOR_METRICS = 5;
     private final PortfolioRepository portfolioRepository;
     private final MarketDataPort marketDataPort;
     private final RiskPort riskPort;
@@ -50,6 +50,21 @@ public class PortfolioQueryService {
                 .toList();
     }
 
+    // ── Portfolio ──────────────────────────────────────────────────────────────
+
+    public PortfolioDto getPortfolio(UUID id) {
+        log.debug("Fetching portfolio with id={}", id);
+
+        return portfolioRepository.findByIdWithPositions(id)
+                .map(portfolio -> {
+                    Map<String, Double> prices =
+                            portfolioValuationService.fetchLatestPrices(portfolio.getPositions());
+                    double total =
+                            portfolioValuationService.computeTotalValue(portfolio.getPositions(), prices);
+                    return new PortfolioDto(id.toString(), portfolio.getName(), total);
+                }).orElseThrow(() -> new PortfolioNotFoundException("Portfolio not found: " + id));
+    }
+
     // ── Summary ──────────────────────────────────────────────────────────────
 
     public PortfolioSummaryDto getSummary(String id, String range) {
@@ -60,7 +75,7 @@ public class PortfolioQueryService {
 
         if (positions.isEmpty()) return emptyPortfolioSummary();
 
-        LocalDate to   = LocalDate.now();
+        LocalDate to = LocalDate.now();
         LocalDate from = DateRange.fromValue(range).toStartDate(to);
 
         Map<String, List<PriceBar>> barsByTicker =
@@ -74,63 +89,64 @@ public class PortfolioQueryService {
         valueByDate.entrySet().removeIf(e -> e.getValue() == 0.0);
 
         List<Double> portfolioValues = new ArrayList<>(valueByDate.values());
-        List<Double> dailyReturns    =
+        List<Double> dailyReturns =
                 portfolioValuationService.buildDailyReturns(positions, barsByTicker);
 
         if (portfolioValues.isEmpty() || dailyReturns.isEmpty()) return emptyPortfolioSummary();
 
-        double currentValue   = lastOrZero(portfolioValues);
-        double prevValue      = previousOrCurrent(portfolioValues);
-        double dailyReturn    = currentValue - prevValue;
+        double currentValue = lastOrZero(portfolioValues);
+        double prevValue = previousOrCurrent(portfolioValues);
+        double dailyReturn = currentValue - prevValue;
         double dailyReturnPct = safePct(prevValue, dailyReturn);
-        double startValue     = firstOrZero(portfolioValues);
-        double totalDeltaPct  = safePct(startValue, currentValue - startValue);
+        double startValue = firstOrZero(portfolioValues);
+        double totalDeltaPct = safePct(startValue, currentValue - startValue);
 
-        double vol    = riskPort.annualisedVolatility(dailyReturns);
+        double vol = riskPort.annualisedVolatility(dailyReturns);
         double sharpe = riskPort.sharpeRatio(dailyReturns);
         // Calculate daily VaR percentage
-        double dailyVarPct = riskPort.var95(currentValue, dailyReturns);
-
-        // Scale by the square root of the number of days in the range
-        // This prevents the -230% explosion while remaining mathematically sound
-        long daysInRange = ChronoUnit.DAYS.between(from, to);
-        double var95 = dailyVarPct * Math.sqrt(daysInRange);
+        double dailyVarPct = riskPort.var95(currentValue, dailyReturns);   // e.g. 2.5 (%)
+        double var95 = (dailyVarPct / 100.0) * currentValue;               // → ~$2,450
 
         // Delta metrics — compare second half of period against first half.
         int mid = dailyReturns.size() / 2;
-        double volDelta    = 0.0;
+        double dailyReturnDelta = 0.0;
+        double volDelta = 0.0;
         double sharpeDelta = 0.0;
-        double varDelta    = 0.0;
+        double varDelta = 0.0;
         if (mid > 0) {
-            List<Double> firstHalf  = dailyReturns.subList(0, mid);
+            List<Double> firstHalf = dailyReturns.subList(0, mid);
             List<Double> secondHalf = dailyReturns.subList(mid, dailyReturns.size());
-            volDelta    = riskPort.annualisedVolatility(secondHalf)
+            double firstHalfAvg = firstHalf.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+            double secondHalfAvg = secondHalf.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+            dailyReturnDelta = secondHalfAvg - firstHalfAvg; // percentage-point delta
+            volDelta = riskPort.annualisedVolatility(secondHalf)
                     - riskPort.annualisedVolatility(firstHalf);
             sharpeDelta = riskPort.sharpeRatio(secondHalf)
                     - riskPort.sharpeRatio(firstHalf);
-            varDelta    = riskPort.var95(currentValue, secondHalf)
+            varDelta = riskPort.var95(currentValue, secondHalf)
                     - riskPort.var95(currentValue, firstHalf);
         }
 
-        List<Double> spark       = SeriesUtil.downsample(portfolioValues, 7);
+        List<Double> spark = SeriesUtil.downsample(portfolioValues, 7);
         List<Double> returnSpark = SeriesUtil.downsample(dailyReturns, 7);
-        List<Double> volSpark    =
-                SeriesUtil.downsample(riskPort.rollingVolatility(dailyReturns, 20), 7);
+        List<Double> volSpark = SeriesUtil.downsample(
+                riskPort.rollingVolatilityFromReturns(dailyReturns, 20), 7);
 
         // buildRollingMetric slices must be returns, not raw values — pass
         // dailyReturns instead of portfolioValues so the lambda receives
         // pre-converted percentage changes without needing toDailyReturns().
-        List<Double> sharpeSpark = buildRollingMetric(dailyReturns, 7,
-                riskPort::sharpeRatio);
+        List<Double> sharpeSpark = dailyReturns.size() >= MIN_RETURNS_FOR_METRICS
+                ? buildRollingMetric(dailyReturns, 7, riskPort::sharpeRatio)
+                : List.of();
 
-        List<Double> varSpark = buildRollingMetric(dailyReturns, 7,
-                slice -> riskPort.var95(currentValue, slice));
-
+        List<Double> varSpark = dailyReturns.size() >= MIN_RETURNS_FOR_METRICS
+                ? buildRollingMetric(dailyReturns, 7, slice -> riskPort.var95(currentValue, slice))
+                : List.of();
         SparklineDto sparkline = new SparklineDto(spark, returnSpark, volSpark, sharpeSpark, varSpark);
 
         return new PortfolioSummaryDto(
                 currentValue, totalDeltaPct,
-                dailyReturn, dailyReturnPct,
+                dailyReturn, dailyReturnDelta,
                 vol, volDelta,
                 sharpe, sharpeDelta,
                 var95, varDelta,
@@ -143,12 +159,12 @@ public class PortfolioQueryService {
     public List<PositionDto> getPositions(String id) {
         log.debug("Fetching positions portfolioId={}", id);
 
-        Portfolio portfolio  = loadWithPositions(id);
+        Portfolio portfolio = loadWithPositions(id);
         List<PortfolioPosition> positions = portfolio.getPositions();
 
         if (positions.isEmpty()) return List.of();
 
-        LocalDate to   = LocalDate.now();
+        LocalDate to = LocalDate.now();
         LocalDate from = to.minusDays(30);
 
         // Fetch bars once per ticker — this also warms the sync cache so
@@ -173,16 +189,16 @@ public class PortfolioQueryService {
             }
 
             PriceBar latest = bars.getLast();
-            PriceBar prev   = bars.size() > 1 ? bars.get(bars.size() - 2) : latest;
+            PriceBar prev = bars.size() > 1 ? bars.get(bars.size() - 2) : latest;
 
-            double price     = latest.getAdjClose().doubleValue();
-            double change    = latest.dailyReturn(prev) * prev.getAdjClose().doubleValue();
+            double price = latest.getAdjClose().doubleValue();
+            double change = latest.dailyReturn(prev) * prev.getAdjClose().doubleValue();
             double changePct = latest.dailyReturn(prev) * 100;
-            double posValue  = price * pos.getQuantity().doubleValue();
+            double posValue = price * pos.getQuantity().doubleValue();
 
             List<Double> returns = toReturnsFromBars(bars);
-            double vol   = riskPort.annualisedVolatility(returns);
-            int score    = riskPort.riskScore(pos.getAsset().getType().name(), vol);
+            double vol = riskPort.annualisedVolatility(returns);
+            int score = riskPort.riskScore(pos.getAsset().getType().name(), vol);
             String level = riskPort.riskLevel(score);
 
             return new PositionDto(
@@ -196,7 +212,7 @@ public class PortfolioQueryService {
                     score,
                     level,
                     SeriesUtil.formatVolume(latest.getVolume()),
-                    SeriesUtil.formatMarketCap(posValue),
+                    SeriesUtil.formatPositionValue(posValue),
                     pos.getAsset().getSector().getLabel()
             );
         }).toList();
@@ -221,7 +237,7 @@ public class PortfolioQueryService {
         Map<Sector, Double> valuesBySector = new LinkedHashMap<>();
 
         portfolio.getPositions().forEach(pos -> {
-            double price    = priceByTicker.getOrDefault(pos.getAsset().getTicker(), 0.0);
+            double price = priceByTicker.getOrDefault(pos.getAsset().getTicker(), 0.0);
             double posValue = price * pos.getQuantity().doubleValue();
             valuesBySector.merge(pos.getAsset().getSector(), posValue, Double::sum);
         });
@@ -249,7 +265,7 @@ public class PortfolioQueryService {
 
         Portfolio portfolio = loadWithPositions(id);
 
-        LocalDate to   = LocalDate.now();
+        LocalDate to = LocalDate.now();
         LocalDate from = DateRange.fromValue(range).toStartDate(to);
 
         Map<LocalDate, Double> valueByDate =
@@ -258,11 +274,10 @@ public class PortfolioQueryService {
         // Remove zero-value dates before computing returns — same as getSummary.
         valueByDate.entrySet().removeIf(e -> e.getValue() == 0.0);
 
-        List<Double> values  = new ArrayList<>(valueByDate.values());
+        List<Double> values = new ArrayList<>(valueByDate.values());
         List<LocalDate> dates = new ArrayList<>(valueByDate.keySet());
 
-        List<Double> dailyReturns = toDailyReturnsFromValues(values);
-        List<Double> rollingVol   = riskPort.rollingVolatility(dailyReturns, 20);
+        List<Double> rollingVol = riskPort.rollingVolatility(values, 20);  // let rollingVolatility handle conversion
 
         // rollingVol is shorter than dailyReturns by (window - 1) = 19 bars.
         // Align to the tail of the dates list so each point maps to the correct date.
@@ -308,8 +323,8 @@ public class PortfolioQueryService {
         Map<String, Double> sectorWeights = new LinkedHashMap<>();
 
         portfolio.getPositions().forEach(pos -> {
-            double price    = priceByTicker.getOrDefault(pos.getAsset().getTicker(), 0.0);
-            double weight   = (price * pos.getQuantity().doubleValue() / totalValue) * 100;
+            double price = priceByTicker.getOrDefault(pos.getAsset().getTicker(), 0.0);
+            double weight = (price * pos.getQuantity().doubleValue() / totalValue) * 100;
             sectorWeights.merge(pos.getAsset().getSector().getLabel(), weight, Double::sum);
         });
 
@@ -368,7 +383,7 @@ public class PortfolioQueryService {
                 pos.getAsset().getName(),
                 pos.getAsset().getType().name(),
                 0.0, 0.0, 0.0, 0, "UNKNOWN", "N/A",
-                SeriesUtil.formatMarketCap(posValue),
+                SeriesUtil.formatPositionValue(posValue),
                 pos.getAsset().getSector().getLabel()
         );
     }
@@ -383,19 +398,6 @@ public class PortfolioQueryService {
         return result;
     }
 
-    // Converts a list of raw portfolio values to percentage daily returns.
-    // Used for volatility calculations — rolling vol expects returns, not values.
-    private List<Double> toDailyReturnsFromValues(List<Double> values) {
-        if (values.size() < 2) return List.of();
-
-        List<Double> returns = new ArrayList<>(values.size() - 1);
-        for (int i = 1; i < values.size(); i++) {
-            double prev = values.get(i - 1);
-            returns.add(prev != 0.0 ? (values.get(i) - prev) / prev : 0.0);
-        }
-        return returns;
-    }
-
     private List<Double> buildRollingMetric(
             List<Double> values, int points, Function<List<Double>, Double> metric) {
 
@@ -405,7 +407,7 @@ public class PortfolioQueryService {
         double step = (double) (values.size() - 1) / (points - 1);
 
         for (int i = 0; i < points; i++) {
-            int end   = Math.min((int) Math.round(i * step) + 1, values.size());
+            int end = Math.min((int) Math.round(i * step) + 1, values.size());
             int start = Math.max(0, end - 30);
             result.add(metric.apply(values.subList(start, end)));
         }

@@ -11,11 +11,11 @@ public class SeriesUtil {
         return volume.toString();
     }
 
-    public static String formatMarketCap(double value) {
-        if (value >= 1_000_000_000_000.0) return "%.2fT".formatted(value / 1_000_000_000_000.0);
+    public static String formatPositionValue(double value) {
         if (value >= 1_000_000_000.0) return "%.2fB".formatted(value / 1_000_000_000.0);
-        if (value >= 1_000_000.0) return "%.2fM".formatted(value / 1_000_000.0);
-        return "%.0f".formatted(value);
+        if (value >= 1_000_000.0)     return "%.2fM".formatted(value / 1_000_000.0);
+        if (value >= 1_000.0)         return "%.1fK".formatted(value / 1_000.0);
+        return "$%.0f".formatted(value);
     }
 
     public static List<Double> downsample(List<Double> series, int targetPoints) {

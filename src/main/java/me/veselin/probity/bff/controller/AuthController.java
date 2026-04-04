@@ -7,9 +7,9 @@ import me.veselin.probity.auth.dto.LoginCommand;
 import me.veselin.probity.auth.dto.RegisterCommand;
 import me.veselin.probity.auth.exception.UnauthorizedException;
 import me.veselin.probity.bff.cookie.CookieService;
-import me.veselin.probity.bff.dto.AuthResponse;
-import me.veselin.probity.bff.dto.LoginRequest;
-import me.veselin.probity.bff.dto.RegisterRequest;
+import me.veselin.probity.bff.dto.auth.AuthResponse;
+import me.veselin.probity.bff.dto.auth.LoginRequest;
+import me.veselin.probity.bff.dto.auth.RegisterRequest;
 import me.veselin.probity.auth.dto.AuthResult;
 import me.veselin.probity.auth.port.AuthCommandPort;
 import me.veselin.probity.common.util.ApiRoutes;
@@ -19,14 +19,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping(ApiRoutes.Auth.ROOT)
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthCommandPort authCommandPort;
     private final CookieService cookieService;
 
-    @PostMapping("/register")
+    @PostMapping(ApiRoutes.Auth.REGISTER)
     public ResponseEntity<Void> register(@Valid @RequestBody RegisterRequest request) {
         authCommandPort.register(
                 new RegisterCommand(request.username(), request.email(), request.password())
@@ -34,7 +33,7 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
-    @PostMapping("/login")
+    @PostMapping(ApiRoutes.Auth.LOGIN)
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
                                               HttpServletResponse response) {
         AuthResult result = authCommandPort.login(
@@ -49,7 +48,7 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponse(result.username(), result.role()));
     }
 
-    @PostMapping("/refresh")
+    @PostMapping(ApiRoutes.Auth.REFRESH)
     public ResponseEntity<Void> refresh(@CookieValue(value = "refresh_token", required = false) String refreshToken,
                                         HttpServletResponse response) {
         if (refreshToken == null) {
@@ -66,7 +65,7 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/logout")
+    @PostMapping(ApiRoutes.Auth.LOGOUT)
     public ResponseEntity<Void> logout(
             @CookieValue(value = "refresh_token", required = false) String refreshToken,
             @CookieValue(value = "access_token", required = false) String accessToken,
