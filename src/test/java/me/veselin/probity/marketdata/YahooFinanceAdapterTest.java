@@ -64,7 +64,7 @@ class YahooFinanceAdapterTest {
                 {
                   "chart": {
                     "result": [{
-                      "timestamp": [1704844800, 1705708800],
+                      "timestamp": [1704893400, 1705757400],
                       "indicators": {
                         "quote": [{
                           "open":   [180.00, 190.00],
@@ -105,7 +105,7 @@ class YahooFinanceAdapterTest {
                 {
                   "chart": {
                     "result": [{
-                      "timestamp": [1704844800, 1705708800],
+                      "timestamp": [1704893400, 1705757400],
                       "indicators": {
                         "quote": [{
                           "open":   [null, 190.00],

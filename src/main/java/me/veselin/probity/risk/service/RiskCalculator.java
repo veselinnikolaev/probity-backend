@@ -50,8 +50,8 @@ public class RiskCalculator implements RiskPort {
         double mean = mean(dailyReturns);
         double stdDev = Math.sqrt(variance(dailyReturns, mean));
 
-        // Logic: (Z-Score * Standard Deviation) * 100
-        return Z_95 * stdDev * 100;
+        // Dollar VaR: portfolioValue × Z × σ
+        return portfolioValue * Z_95 * stdDev;
     }
 
     @Override
@@ -82,8 +82,8 @@ public class RiskCalculator implements RiskPort {
     public int riskScore(String assetType, double annualisedVol) {
         int base = AssetType.valueOf(assetType.toUpperCase()).getBaseRiskScore();
         int volAddon = annualisedVol <= 15
-                ? (int)(annualisedVol / 15.0 * 5)          // 0–5 pts for 0–15% vol
-                : (int)(5 + (annualisedVol - 15) / 10 * 5); // 5+ pts above 15%
+                ? 0                                              // no addon for vol ≤ 15%
+                : (int)((annualisedVol - 15) / 10 * 5);        // 5 pts per 10% above 15%
         return Math.min(100, base + volAddon);
     }
 
