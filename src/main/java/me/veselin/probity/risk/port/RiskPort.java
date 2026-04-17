@@ -27,6 +27,7 @@ public interface RiskPort {
      * Returns one vol value per price point.
      */
     List<Double> rollingVolatility(List<Double> priceSeries, int windowDays);
+    List<Double> rollingVolatilityFromReturns(List<Double> dailyReturns, int windowDays);
 
     /**
      * Converts a price series to daily log returns.

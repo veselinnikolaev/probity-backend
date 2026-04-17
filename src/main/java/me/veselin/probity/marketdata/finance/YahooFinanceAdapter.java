@@ -69,7 +69,7 @@ public class YahooFinanceAdapter implements FinanceAdapter {
 
     private void validateResponse(JsonNode root, String ticker) {
         if (root == null) {
-            throw new MarketDataException("Null response from Yahoo Finance for " + ticker);
+            throw new MarketDataException("Received null response from Yahoo Finance for " + ticker);
         }
 
         JsonNode error = root.path("chart").path("error");
@@ -83,7 +83,7 @@ public class YahooFinanceAdapter implements FinanceAdapter {
         if (result.isMissingNode() || result.isNull()
                 || !result.isArray() || result.isEmpty()) {
             throw new MarketDataException(
-                    "No result data from Yahoo Finance for " + ticker);
+                    "No data returned from Yahoo Finance for " + ticker);
         }
     }
 
@@ -103,7 +103,7 @@ public class YahooFinanceAdapter implements FinanceAdapter {
         // Validate array lengths match before iterating — Yahoo occasionally
         // returns ragged arrays on partial trading days.
         int len = timestamps.size();
-        if (quote.size() == 0 || adjCloseArr.size() == 0) {
+        if (quote.isEmpty() || adjCloseArr.isEmpty()) {
             log.debug("Empty quote/adjclose arrays for ticker={}", ticker);
             return List.of();
         }

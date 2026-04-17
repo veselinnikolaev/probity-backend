@@ -1,4 +1,4 @@
-package me.veselin.probity.bff.dto;
+package me.veselin.probity.bff.dto.auth;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
