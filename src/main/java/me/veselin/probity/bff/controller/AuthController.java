@@ -49,7 +49,7 @@ public class AuthController {
     }
 
     @PostMapping(ApiRoutes.Auth.REFRESH)
-    public ResponseEntity<Void> refresh(@CookieValue(value = "refresh_token", required = false) String refreshToken,
+    public ResponseEntity<AuthResponse> refresh(@CookieValue(value = "refresh_token", required = false) String refreshToken,
                                         HttpServletResponse response) {
         if (refreshToken == null) {
             throw new UnauthorizedException("Refresh token is missing");
@@ -62,7 +62,7 @@ public class AuthController {
         response.addHeader(HttpHeaders.SET_COOKIE,
                 cookieService.buildRefreshCookie(result.refreshToken()).toString());  // rotation
 
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(new AuthResponse(result.username(), result.role()));
     }
 
     @PostMapping(ApiRoutes.Auth.LOGOUT)

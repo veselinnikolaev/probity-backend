@@ -191,7 +191,7 @@ public class PortfolioValuationService {
             }
         }
 
-        if (commonDates == null || commonDates.size() < 2) {
+        if (commonDates.size() < 2) {
             log.warn("Fewer than 2 common trading days across tickers — cannot compute returns");
             return List.of();
         }

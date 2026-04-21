@@ -97,19 +97,17 @@ public class PortfolioQueryService {
         double currentValue = lastOrZero(portfolioValues);
         double prevValue = previousOrCurrent(portfolioValues);
         double dailyReturn = currentValue - prevValue;
-        double dailyReturnPct = safePct(prevValue, dailyReturn);
         double startValue = firstOrZero(portfolioValues);
         double totalDeltaPct = safePct(startValue, currentValue - startValue);
 
         double vol = riskPort.annualisedVolatility(dailyReturns);
         double sharpe = riskPort.sharpeRatio(dailyReturns);
         // Calculate daily VaR percentage
-        double dailyVarPct = riskPort.var95(currentValue, dailyReturns);   // e.g. 2.5 (%)
-        double var95 = (dailyVarPct / 100.0) * currentValue;               // → ~$2,450
+        double var95 = riskPort.var95(currentValue, dailyReturns);
 
         // Delta metrics — compare second half of period against first half.
         int mid = dailyReturns.size() / 2;
-        double dailyReturnDelta = 0.0;
+        double dailyReturnDeltaPct = 0.0;
         double volDelta = 0.0;
         double sharpeDelta = 0.0;
         double varDelta = 0.0;
@@ -118,7 +116,7 @@ public class PortfolioQueryService {
             List<Double> secondHalf = dailyReturns.subList(mid, dailyReturns.size());
             double firstHalfAvg = firstHalf.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
             double secondHalfAvg = secondHalf.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
-            dailyReturnDelta = secondHalfAvg - firstHalfAvg; // percentage-point delta
+            dailyReturnDeltaPct = (secondHalfAvg - firstHalfAvg) * 100.0;
             volDelta = riskPort.annualisedVolatility(secondHalf)
                     - riskPort.annualisedVolatility(firstHalf);
             sharpeDelta = riskPort.sharpeRatio(secondHalf)
@@ -146,7 +144,7 @@ public class PortfolioQueryService {
 
         return new PortfolioSummaryDto(
                 currentValue, totalDeltaPct,
-                dailyReturn, dailyReturnDelta,
+                dailyReturn, dailyReturnDeltaPct,
                 vol, volDelta,
                 sharpe, sharpeDelta,
                 var95, varDelta,
