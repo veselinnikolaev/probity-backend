@@ -14,6 +14,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -32,7 +34,17 @@ public class SecurityConfiguration {
         http
                 .cors(Customizer.withDefaults())
                 .headers(headers -> headers.contentTypeOptions(Customizer.withDefaults()))
-                .csrf(AbstractHttpConfigurer::disable)
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                        .ignoringRequestMatchers(
+                                ApiRoutes.Auth.LOGIN,
+                                ApiRoutes.Auth.REGISTER,
+                                ApiRoutes.Auth.REFRESH,
+                                ApiRoutes.Auth.LOGOUT,
+                                ApiRoutes.Auth.CSRF
+                        )
+                )
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
@@ -44,6 +56,7 @@ public class SecurityConfiguration {
                                 ApiRoutes.Auth.REGISTER,
                                 ApiRoutes.Auth.REFRESH,
                                 ApiRoutes.Auth.LOGOUT,
+                                ApiRoutes.Auth.CSRF,
                                 "/error"
                         ).permitAll()
                         .anyRequest().authenticated()
@@ -60,7 +73,8 @@ public class SecurityConfiguration {
 
         config.setAllowedOrigins(List.of("http://localhost:5173"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
+        config.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-XSRF-TOKEN"));
+        config.setExposedHeaders(List.of("X-XSRF-TOKEN"));
         config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

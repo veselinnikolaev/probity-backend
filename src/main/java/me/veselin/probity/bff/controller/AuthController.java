@@ -1,5 +1,6 @@
 package me.veselin.probity.bff.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import me.veselin.probity.common.util.ApiRoutes;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -24,6 +26,15 @@ public class AuthController {
 
     private final AuthCommandPort authCommandPort;
     private final CookieService cookieService;
+
+    @GetMapping(ApiRoutes.Auth.CSRF)
+    public ResponseEntity<Void> csrf(HttpServletRequest request, HttpServletResponse response) {
+        CsrfToken csrfToken = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+        if (csrfToken != null) {
+            csrfToken.getToken(); // force the token to be written to the response cookie
+        }
+        return ResponseEntity.ok().build();
+    }
 
     @PostMapping(ApiRoutes.Auth.REGISTER)
     public ResponseEntity<Void> register(@Valid @RequestBody RegisterRequest request) {
