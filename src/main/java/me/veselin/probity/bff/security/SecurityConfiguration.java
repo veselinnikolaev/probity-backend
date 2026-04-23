@@ -2,6 +2,7 @@ package me.veselin.probity.bff.security;
 
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.common.util.ApiRoutes;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -26,6 +27,9 @@ import java.util.List;
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfiguration {
+    @Value("${app.cors.allowed-origins}")
+    private String allowedOrigins;
+
     private final JwtAuthenticationFilter jwtFilter;
     private final AuthenticationEntryPoint authenticationEntryPoint;
 
@@ -71,7 +75,7 @@ public class SecurityConfiguration {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOrigins(List.of("http://localhost:5173"));
+        config.setAllowedOrigins(List.of(allowedOrigins.split(",")));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-XSRF-TOKEN"));
         config.setExposedHeaders(List.of("X-XSRF-TOKEN"));
