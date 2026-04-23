@@ -13,6 +13,7 @@ import me.veselin.probity.portfolio.enumeration.Sector;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
 import me.veselin.probity.portfolio.repository.PortfolioRepository;
 import me.veselin.probity.risk.port.RiskPort;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,11 +53,15 @@ public class PortfolioQueryService {
 
     // ── Portfolio ──────────────────────────────────────────────────────────────
 
-    public PortfolioDto getPortfolio(UUID id) {
+    public PortfolioDto getPortfolio(UUID id, UUID principalId) {
         log.debug("Fetching portfolio with id={}", id);
 
         return portfolioRepository.findByIdWithPositions(id)
                 .map(portfolio -> {
+                    if (!portfolio.getUserId().equals(principalId)) {
+                        throw new AccessDeniedException("Access denied to portfolio: " + id);
+                    }
+
                     Map<String, Double> prices =
                             portfolioValuationService.fetchLatestPrices(portfolio.getPositions());
                     double total =
@@ -67,10 +72,10 @@ public class PortfolioQueryService {
 
     // ── Summary ──────────────────────────────────────────────────────────────
 
-    public PortfolioSummaryDto getSummary(String id, String range) {
+    public PortfolioSummaryDto getSummary(UUID id, String range, UUID principalId) {
         log.debug("Building summary portfolioId={} range={}", id, range);
 
-        Portfolio portfolio = loadWithPositions(id);
+        Portfolio portfolio = loadWithPositions(id, principalId);
         List<PortfolioPosition> positions = portfolio.getPositions();
 
         if (positions.isEmpty()) return emptyPortfolioSummary();
@@ -97,19 +102,17 @@ public class PortfolioQueryService {
         double currentValue = lastOrZero(portfolioValues);
         double prevValue = previousOrCurrent(portfolioValues);
         double dailyReturn = currentValue - prevValue;
-        double dailyReturnPct = safePct(prevValue, dailyReturn);
         double startValue = firstOrZero(portfolioValues);
         double totalDeltaPct = safePct(startValue, currentValue - startValue);
 
         double vol = riskPort.annualisedVolatility(dailyReturns);
         double sharpe = riskPort.sharpeRatio(dailyReturns);
         // Calculate daily VaR percentage
-        double dailyVarPct = riskPort.var95(currentValue, dailyReturns);   // e.g. 2.5 (%)
-        double var95 = (dailyVarPct / 100.0) * currentValue;               // → ~$2,450
+        double var95 = riskPort.var95(currentValue, dailyReturns);
 
         // Delta metrics — compare second half of period against first half.
         int mid = dailyReturns.size() / 2;
-        double dailyReturnDelta = 0.0;
+        double dailyReturnDeltaPct = 0.0;
         double volDelta = 0.0;
         double sharpeDelta = 0.0;
         double varDelta = 0.0;
@@ -118,7 +121,7 @@ public class PortfolioQueryService {
             List<Double> secondHalf = dailyReturns.subList(mid, dailyReturns.size());
             double firstHalfAvg = firstHalf.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
             double secondHalfAvg = secondHalf.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
-            dailyReturnDelta = secondHalfAvg - firstHalfAvg; // percentage-point delta
+            dailyReturnDeltaPct = (secondHalfAvg - firstHalfAvg) * 100.0;
             volDelta = riskPort.annualisedVolatility(secondHalf)
                     - riskPort.annualisedVolatility(firstHalf);
             sharpeDelta = riskPort.sharpeRatio(secondHalf)
@@ -146,7 +149,7 @@ public class PortfolioQueryService {
 
         return new PortfolioSummaryDto(
                 currentValue, totalDeltaPct,
-                dailyReturn, dailyReturnDelta,
+                dailyReturn, dailyReturnDeltaPct,
                 vol, volDelta,
                 sharpe, sharpeDelta,
                 var95, varDelta,
@@ -156,10 +159,10 @@ public class PortfolioQueryService {
 
     // ── Positions ────────────────────────────────────────────────────────────
 
-    public List<PositionDto> getPositions(String id) {
+    public List<PositionDto> getPositions(UUID id, UUID principalId) {
         log.debug("Fetching positions portfolioId={}", id);
 
-        Portfolio portfolio = loadWithPositions(id);
+        Portfolio portfolio = loadWithPositions(id, principalId);
         List<PortfolioPosition> positions = portfolio.getPositions();
 
         if (positions.isEmpty()) return List.of();
@@ -220,10 +223,10 @@ public class PortfolioQueryService {
 
     // ── Composition ──────────────────────────────────────────────────────────
 
-    public List<CompositionEntryDto> getComposition(String id) {
+    public List<CompositionEntryDto> getComposition(UUID id, UUID principalId) {
         log.debug("Building composition portfolioId={}", id);
 
-        Portfolio portfolio = loadWithPositions(id);
+        Portfolio portfolio = loadWithPositions(id, principalId);
 
         // Fetch all prices once up front rather than once per position in forEach.
         Map<String, Double> priceByTicker = portfolio.getPositions().stream()
@@ -260,10 +263,10 @@ public class PortfolioQueryService {
 
     // ── Volatility ───────────────────────────────────────────────────────────
 
-    public List<VolatilityPointDto> getVolatility(String id, String range) {
+    public List<VolatilityPointDto> getVolatility(UUID id, String range, UUID principalId) {
         log.debug("Calculating volatility portfolioId={} range={}", id, range);
 
-        Portfolio portfolio = loadWithPositions(id);
+        Portfolio portfolio = loadWithPositions(id, principalId);
 
         LocalDate to = LocalDate.now();
         LocalDate from = DateRange.fromValue(range).toStartDate(to);
@@ -297,10 +300,10 @@ public class PortfolioQueryService {
 
     // ── Alerts ───────────────────────────────────────────────────────────────
 
-    public List<RiskAlertDto> getAlerts(String id) {
+    public List<RiskAlertDto> getAlerts(UUID id, UUID principalId) {
         log.debug("Generating risk alerts portfolioId={}", id);
 
-        Portfolio portfolio = loadWithPositions(id);
+        Portfolio portfolio = loadWithPositions(id, principalId);
 
         // Single price fetch pass — reused for both total value and sector weights.
         Map<String, Double> priceByTicker = portfolio.getPositions().stream()
@@ -368,12 +371,16 @@ public class PortfolioQueryService {
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
-    private Portfolio loadWithPositions(String id) {
-        return portfolioRepository.findByIdWithPositions(UUID.fromString(id))
+    private Portfolio loadWithPositions(UUID id, UUID principalId) {
+        Portfolio portfolio = portfolioRepository.findByIdWithPositions(id)
                 .orElseThrow(() -> {
                     log.error("Portfolio not found id={}", id);
                     return new PortfolioNotFoundException("Portfolio not found: " + id);
                 });
+        if (!portfolio.getUserId().equals(principalId)) {
+            throw new AccessDeniedException("Access denied to portfolio: " + id);
+        }
+        return portfolio;
     }
 
     private PositionDto emptyPositionDto(PortfolioPosition pos, String ticker, double posValue) {

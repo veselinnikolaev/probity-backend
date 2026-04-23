@@ -1,5 +1,6 @@
 package me.veselin.probity.bff.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import me.veselin.probity.common.util.ApiRoutes;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -24,6 +26,15 @@ public class AuthController {
 
     private final AuthCommandPort authCommandPort;
     private final CookieService cookieService;
+
+    @GetMapping(ApiRoutes.Auth.CSRF)
+    public ResponseEntity<Void> csrf(HttpServletRequest request, HttpServletResponse response) {
+        CsrfToken csrfToken = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+        if (csrfToken != null) {
+            csrfToken.getToken(); // force the token to be written to the response cookie
+        }
+        return ResponseEntity.ok().build();
+    }
 
     @PostMapping(ApiRoutes.Auth.REGISTER)
     public ResponseEntity<Void> register(@Valid @RequestBody RegisterRequest request) {
@@ -49,7 +60,7 @@ public class AuthController {
     }
 
     @PostMapping(ApiRoutes.Auth.REFRESH)
-    public ResponseEntity<Void> refresh(@CookieValue(value = "refresh_token", required = false) String refreshToken,
+    public ResponseEntity<AuthResponse> refresh(@CookieValue(value = "refresh_token", required = false) String refreshToken,
                                         HttpServletResponse response) {
         if (refreshToken == null) {
             throw new UnauthorizedException("Refresh token is missing");
@@ -62,7 +73,7 @@ public class AuthController {
         response.addHeader(HttpHeaders.SET_COOKIE,
                 cookieService.buildRefreshCookie(result.refreshToken()).toString());  // rotation
 
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(new AuthResponse(result.username(), result.role()));
     }
 
     @PostMapping(ApiRoutes.Auth.LOGOUT)

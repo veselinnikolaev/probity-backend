@@ -24,7 +24,11 @@ public class RefreshIntegrationTest extends BaseAuthIntegrationTest {
 
         mockMvc.perform(post(ApiRoutes.Auth.REFRESH)
                         .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken())))
-                .andExpect(status().isNoContent())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").exists())
+                .andExpect(jsonPath("$.username").isString())
+                .andExpect(jsonPath("$.role").exists())
+                .andExpect(jsonPath("$.role").isString())
                 .andExpect(cookie().exists(Token.ACCESS.getCookieName()))
                 .andExpect(cookie().exists(Token.REFRESH.getCookieName()));
     }
@@ -35,7 +39,11 @@ public class RefreshIntegrationTest extends BaseAuthIntegrationTest {
 
         MvcResult refreshResult = mockMvc.perform(post(ApiRoutes.Auth.REFRESH)
                         .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken())))
-                .andExpect(status().isNoContent())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").exists())
+                .andExpect(jsonPath("$.username").isString())
+                .andExpect(jsonPath("$.role").exists())
+                .andExpect(jsonPath("$.role").isString())
                 .andReturn();
 
         String newRefreshToken = Arrays.stream(refreshResult.getResponse().getCookies())
@@ -51,7 +59,11 @@ public class RefreshIntegrationTest extends BaseAuthIntegrationTest {
         // new token works
         mockMvc.perform(post(ApiRoutes.Auth.REFRESH)
                         .cookie(new Cookie(Token.REFRESH.getCookieName(), newRefreshToken)))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").exists())
+                .andExpect(jsonPath("$.username").isString())
+                .andExpect(jsonPath("$.role").exists())
+                .andExpect(jsonPath("$.role").isString());
     }
 
     @Test
