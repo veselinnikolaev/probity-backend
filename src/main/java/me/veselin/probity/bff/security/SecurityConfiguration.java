@@ -27,7 +27,7 @@ import java.util.List;
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfiguration {
-    @Value("${app.cors.allowed-origins}")
+    @Value("${probity.cors.allowed-origins}")
     private String allowedOrigins;
 
     private final JwtAuthenticationFilter jwtFilter;
@@ -61,6 +61,7 @@ public class SecurityConfiguration {
                                 ApiRoutes.Auth.REFRESH,
                                 ApiRoutes.Auth.LOGOUT,
                                 ApiRoutes.Auth.CSRF,
+                                "/actuator/health",
                                 "/error"
                         ).permitAll()
                         .anyRequest().authenticated()

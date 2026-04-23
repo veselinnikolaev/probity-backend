@@ -10,10 +10,12 @@ import java.time.Duration;
 
 @Service
 public class CookieService {
-    @Value("${app.jwt.access.expiration.seconds}")
+    @Value("${probity.jwt.access.expiration.seconds}")
     private long accessExpirationTime;
-    @Value("${app.jwt.refresh.expiration.seconds}")
+    @Value("${probity.jwt.refresh.expiration.seconds}")
     private long refreshExpirationTime;
+    @Value("${probity.cookie.same-site:Strict}")
+    private String sameSite;
 
     public ResponseCookie buildAccessCookie(String token) {
         return ResponseCookie.from(Token.ACCESS.getCookieName(), token)
@@ -21,7 +23,7 @@ public class CookieService {
                 .secure(true)
                 .path("/")
                 .maxAge(Duration.ofSeconds(accessExpirationTime))
-                .sameSite("Strict")
+                .sameSite(sameSite)
                 .build();
     }
 
@@ -31,7 +33,7 @@ public class CookieService {
                 .secure(true)
                 .path(ApiRoutes.Auth.REFRESH)  // only sent to /refresh — not every request
                 .maxAge(Duration.ofSeconds(refreshExpirationTime))
-                .sameSite("Strict")
+                .sameSite(sameSite)
                 .build();
     }
 

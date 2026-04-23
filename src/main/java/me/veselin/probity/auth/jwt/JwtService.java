@@ -24,21 +24,21 @@ import java.util.concurrent.TimeUnit;
 public class JwtService {
     private final RedisTemplate<String, String> redisTemplate;
 
-    @Value("${app.jwt.secret}")
+    @Value("${probity.jwt.secret}")
     private String secret;
     private SecretKey key;
 
-    @Value("${app.jwt.access.expiration.seconds}")
+    @Value("${probity.jwt.access.expiration.seconds}")
     private long accessExpirationTime;
-    @Value("${app.jwt.refresh.expiration.seconds}")
+    @Value("${probity.jwt.refresh.expiration.seconds}")
     private long refreshExpirationTime;
 
-    @Value("${app.jwt.issuer}")
+    @Value("${probity.jwt.issuer}")
     private String issuer;
 
-    @Value("${app.jwt.refresh-prefix}")
+    @Value("${probity.jwt.refresh-prefix}")
     private String refreshPrefix;
-    @Value("${app.jwt.blacklist-prefix}")
+    @Value("${probity.jwt.blacklist-prefix}")
     private String blacklistedPrefix;
 
     @PostConstruct
