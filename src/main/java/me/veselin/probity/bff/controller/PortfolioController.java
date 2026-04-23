@@ -30,38 +30,44 @@ public class PortfolioController {
     }
 
     @GetMapping(ApiRoutes.Portfolios.PORTFOLIO)
-    public ResponseEntity<PortfolioDto> getPortfolio(@PathVariable UUID id) {
-        return ResponseEntity.ok(portfolioQueryService.getPortfolio(id));
+    public ResponseEntity<PortfolioDto> getPortfolio(@PathVariable UUID id,
+                                                     @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(portfolioQueryService.getPortfolio(id, principal.id()));
     }
 
     @GetMapping(ApiRoutes.Portfolios.SUMMARY)
     public ResponseEntity<PortfolioSummaryDto> getSummary(
-            @PathVariable String id,
-            @RequestParam(defaultValue = "90d") String range) {
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "90d") String range,
+            @AuthenticationPrincipal UserPrincipal principal) {
         System.out.println(range);
-        return ResponseEntity.ok(portfolioQueryService.getSummary(id, range));
+        return ResponseEntity.ok(portfolioQueryService.getSummary(id, range, principal.id()));
     }
 
     @GetMapping(ApiRoutes.Portfolios.POSITIONS)
-    public ResponseEntity<List<PositionDto>> getPositions(@PathVariable String id) {
-        return ResponseEntity.ok(portfolioQueryService.getPositions(id));
+    public ResponseEntity<List<PositionDto>> getPositions(@PathVariable UUID id,
+                                                          @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(portfolioQueryService.getPositions(id, principal.id()));
     }
 
     @GetMapping(ApiRoutes.Portfolios.COMPOSITION)
-    public ResponseEntity<List<CompositionEntryDto>> getComposition(@PathVariable String id) {
-        return ResponseEntity.ok(portfolioQueryService.getComposition(id));
+    public ResponseEntity<List<CompositionEntryDto>> getComposition(@PathVariable UUID id,
+                                                                    @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(portfolioQueryService.getComposition(id, principal.id()));
     }
 
     @GetMapping(ApiRoutes.Portfolios.VOLATILITY)
     public ResponseEntity<List<VolatilityPointDto>> getVolatility(
-            @PathVariable String id,
-            @RequestParam(defaultValue = "90d") String range) {
-        return ResponseEntity.ok(portfolioQueryService.getVolatility(id, range));
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "90d") String range,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(portfolioQueryService.getVolatility(id, range, principal.id()));
     }
 
     @GetMapping(ApiRoutes.Portfolios.ALERTS)
-    public ResponseEntity<List<RiskAlertDto>> getAlerts(@PathVariable String id) {
-        return ResponseEntity.ok(portfolioQueryService.getAlerts(id));
+    public ResponseEntity<List<RiskAlertDto>> getAlerts(@PathVariable UUID id,
+                                                        @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(portfolioQueryService.getAlerts(id, principal.id()));
     }
 
     @PostMapping(ApiRoutes.Portfolios.PORTFOLIOS)
