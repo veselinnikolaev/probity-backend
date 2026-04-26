@@ -44,4 +44,11 @@ public interface RiskPort {
      * Human-readable risk level from a score.
      */
     String riskLevel(int score);
+
+    /**
+     * Max drawdown as a percentage of portfolio value.
+     * Input raw values, not returns
+     * Returns percentage of portfolio value, or 0 if no drawdown
+     */
+    double maxDrawdown(List<Double> portfolioValues);
 }

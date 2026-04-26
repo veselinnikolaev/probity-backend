@@ -13,20 +13,19 @@ import java.util.UUID;
 @Repository
 public interface PortfolioRepository extends JpaRepository<Portfolio, UUID> {
     @Query("""
-        SELECT p FROM Portfolio p
-        LEFT JOIN FETCH p.positions pos
-        LEFT JOIN FETCH pos.asset
-        WHERE p.id = :id
-    """)
+                SELECT p FROM Portfolio p
+                LEFT JOIN FETCH p.positions pos
+                LEFT JOIN FETCH pos.asset
+                WHERE p.id = :id
+            """)
     Optional<Portfolio> findByIdWithPositions(@Param("id") UUID id);
 
-    // Add to PortfolioRepository.java
     @Query("""
-    SELECT p FROM Portfolio p
-    LEFT JOIN FETCH p.positions pos
-    LEFT JOIN FETCH pos.asset
-    WHERE p.userId = :userId
-""")
+                SELECT p FROM Portfolio p
+                LEFT JOIN FETCH p.positions pos
+                LEFT JOIN FETCH pos.asset
+                WHERE p.userId = :userId
+            """)
     List<Portfolio> findByUserIdWithPositions(@Param("userId") UUID userId);
 }
 

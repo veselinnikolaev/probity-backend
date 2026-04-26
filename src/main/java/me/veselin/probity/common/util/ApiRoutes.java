@@ -29,5 +29,7 @@ public final class ApiRoutes {
         public static final String COMPOSITION = PORTFOLIO + "/composition";
         public static final String SUMMARY = PORTFOLIO + "/summary";
         public static final String POSITIONS = PORTFOLIO + "/positions";
+        public static final String RISK_METRICS = PORTFOLIO + "/risk-metrics";
+        public static final String CORRELATION  = PORTFOLIO + "/correlation";
     }
 }

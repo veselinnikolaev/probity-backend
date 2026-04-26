@@ -70,6 +70,22 @@ public class PortfolioController {
         return ResponseEntity.ok(portfolioQueryService.getAlerts(id, principal.id()));
     }
 
+    @GetMapping(ApiRoutes.Portfolios.RISK_METRICS)
+    public ResponseEntity<RiskMetricsDto> getRiskMetrics(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "90d") String range,
+            @AuthenticationPrincipal UserPrincipal principal){
+        return ResponseEntity.ok(portfolioQueryService.getRiskMetrics(id, range, principal.id()));
+    }
+
+    @GetMapping(ApiRoutes.Portfolios.CORRELATION)
+    public ResponseEntity<CorrelationMatrixDto> getCorrelation(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "90d") String range,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(portfolioQueryService.getCorrelationMatrix(id, range, principal.id()));
+    }
+
     @PostMapping(ApiRoutes.Portfolios.PORTFOLIOS)
     public ResponseEntity<PortfolioCreatedDto> create(@RequestBody PortfolioCreateRequest portfolioCreateDto,
                                                       @AuthenticationPrincipal UserPrincipal userPrincipal){

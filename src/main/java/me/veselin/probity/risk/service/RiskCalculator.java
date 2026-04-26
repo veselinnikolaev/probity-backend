@@ -92,6 +92,19 @@ public class RiskCalculator implements RiskPort {
         return RiskLevel.fromScore(score).name();
     }
 
+    @Override
+    public double maxDrawdown(List<Double> values) {
+        if (values.size() < 2) return 0.0;
+        double peak = values.getFirst();
+        double maxDd = 0.0;
+        for (double v : values) {
+            if (v > peak) peak = v;
+            double dd = (peak - v) / peak;
+            if (dd > maxDd) maxDd = dd;
+        }
+        return maxDd * 100; // return as percentage
+    }
+
     // ── Math helpers — package-private so MonteCarloEngine can reuse ─────────
 
     double mean(List<Double> values) {

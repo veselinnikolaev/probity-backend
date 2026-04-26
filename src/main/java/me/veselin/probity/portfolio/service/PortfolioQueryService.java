@@ -8,6 +8,7 @@ import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.portfolio.domain.Portfolio;
 import me.veselin.probity.portfolio.domain.PortfolioPosition;
 import me.veselin.probity.portfolio.dto.*;
+import me.veselin.probity.portfolio.enumeration.AssetType;
 import me.veselin.probity.portfolio.enumeration.DateRange;
 import me.veselin.probity.portfolio.enumeration.Sector;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
@@ -160,19 +161,13 @@ public class PortfolioQueryService {
     // ── Positions ────────────────────────────────────────────────────────────
 
     public List<PositionDto> getPositions(UUID id, UUID principalId) {
-        log.debug("Fetching positions portfolioId={}", id);
-
         Portfolio portfolio = loadWithPositions(id, principalId);
         List<PortfolioPosition> positions = portfolio.getPositions();
-
         if (positions.isEmpty()) return List.of();
 
         LocalDate to = LocalDate.now();
         LocalDate from = to.minusDays(30);
 
-        // Fetch bars once per ticker — this also warms the sync cache so
-        // no separate getLatestPrice call is needed. The latest bar in the
-        // result is the current price.
         Map<String, List<PriceBar>> barsByTicker = positions.stream()
                 .map(pos -> pos.getAsset().getTicker())
                 .distinct()
@@ -181,13 +176,33 @@ public class PortfolioQueryService {
                         ticker -> marketDataPort.getHistoricalBars(ticker, from, to)
                 ));
 
+        // Need total value upfront for weight and volatilityContribution
+        Map<String, Double> latestPrices = barsByTicker.entrySet().stream()
+                .filter(e -> !e.getValue().isEmpty())
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().getLast().getAdjClose().doubleValue()
+                ));
+
+        double totalValue = positions.stream()
+                .mapToDouble(pos -> {
+                    double price = latestPrices.getOrDefault(pos.getAsset().getTicker(), 0.0);
+                    return price * pos.getQuantity().doubleValue();
+                })
+                .sum();
+
+        // Per-position volatility needed for weighted contribution
+        Map<String, Double> volByTicker = barsByTicker.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> riskPort.annualisedVolatility(toReturnsFromBars(e.getValue()))
+                ));
+
         return positions.stream().map(pos -> {
             String ticker = pos.getAsset().getTicker();
             List<PriceBar> bars = barsByTicker.getOrDefault(ticker, List.of());
 
             if (bars.isEmpty()) {
-                log.warn("No historical data for ticker={} range={} - {}", ticker, from, to);
-                // posValue is 0 since we have no price — caller should render this as N/A.
                 return emptyPositionDto(pos, ticker, 0.0);
             }
 
@@ -199,8 +214,12 @@ public class PortfolioQueryService {
             double changePct = latest.dailyReturn(prev) * 100;
             double posValue = price * pos.getQuantity().doubleValue();
 
+            double weight = totalValue > 0 ? (posValue / totalValue) * 100 : 0.0;
+            double vol = volByTicker.getOrDefault(ticker, 0.0);
+            // Weighted volatility contribution: weight% × annualised vol
+            double volContribution = (weight / 100.0) * vol;
+
             List<Double> returns = toReturnsFromBars(bars);
-            double vol = riskPort.annualisedVolatility(returns);
             int score = riskPort.riskScore(pos.getAsset().getType().name(), vol);
             String level = riskPort.riskLevel(score);
 
@@ -216,7 +235,10 @@ public class PortfolioQueryService {
                     level,
                     SeriesUtil.formatVolume(latest.getVolume()),
                     SeriesUtil.formatPositionValue(posValue),
-                    pos.getAsset().getSector().getLabel()
+                    pos.getAsset().getSector().getLabel(),
+                    weight,
+                    vol,
+                    volContribution
             );
         }).toList();
     }
@@ -335,26 +357,44 @@ public class PortfolioQueryService {
 
         List<RiskAlertDto> alerts = new ArrayList<>();
 
+        // Sector concentration alerts
         sectorWeights.forEach((sector, weight) -> {
             if (weight > 40) {
+                List<String> affected = portfolio.getPositions().stream()
+                        .filter(pos -> pos.getAsset().getSector().getLabel().equals(sector))
+                        .map(pos -> pos.getAsset().getTicker())
+                        .toList();
+
                 alerts.add(new RiskAlertDto(
                         UUID.randomUUID().toString(),
                         "Concentration in %s sector reached %.0f%%".formatted(sector, weight),
-                        "high", "just now", "warning"
+                        "high",
+                        "just now",
+                        affected
                 ));
             }
         });
 
-        double cryptoWeight = sectorWeights.entrySet().stream()
-                .filter(e -> Sector.from(e.getKey()) == Sector.CRYPTO)
-                .mapToDouble(Map.Entry::getValue)
+        double cryptoWeight = portfolio.getPositions().stream()
+                .filter(pos -> pos.getAsset().getType() == AssetType.CRYPTO)
+                .mapToDouble(pos -> {
+                    double price = priceByTicker.getOrDefault(pos.getAsset().getTicker(), 0.0);
+                    return (price * pos.getQuantity().doubleValue() / totalValue) * 100;
+                })
                 .sum();
 
         if (cryptoWeight > 10) {
+            List<String> cryptoTickers = portfolio.getPositions().stream()
+                    .filter(pos -> pos.getAsset().getType() == AssetType.CRYPTO)
+                    .map(pos -> pos.getAsset().getTicker())
+                    .toList();
+
             alerts.add(new RiskAlertDto(
                     UUID.randomUUID().toString(),
                     "Crypto exposure at %.0f%% exceeds 10%% threshold".formatted(cryptoWeight),
-                    "moderate", "recently", "info"
+                    "moderate",
+                    "recently",
+                    cryptoTickers
             ));
         }
 
@@ -362,13 +402,172 @@ public class PortfolioQueryService {
             alerts.add(new RiskAlertDto(
                     UUID.randomUUID().toString(),
                     "No active risk alerts — portfolio within normal bounds",
-                    "low", "now", "ok"
+                    "low",
+                    "now",
+                    List.of()
             ));
         }
 
         return alerts;
     }
 
+    // ── Risk  ──────────────────────────────────────────────────────
+
+    public RiskMetricsDto getRiskMetrics(UUID portfolioId, String range, UUID userId) {
+        log.debug("Building risk metrics portfolioId={} range={}", portfolioId, range);
+
+        Portfolio portfolio = loadWithPositions(portfolioId, userId);
+        List<PortfolioPosition> positions = portfolio.getPositions();
+        if (positions.isEmpty()) return emptyRiskMetrics();
+
+        LocalDate to = LocalDate.now();
+        LocalDate from = DateRange.fromValue(range).toStartDate(to);
+
+        Map<String, List<PriceBar>> barsByTicker =
+                portfolioValuationService.fetchBars(positions, from, to);
+
+        Map<LocalDate, Double> valueByDate =
+                portfolioValuationService.buildValueSeries(positions, barsByTicker);
+        valueByDate.entrySet().removeIf(e -> e.getValue() == 0.0);
+
+        List<Double> values = new ArrayList<>(valueByDate.values());
+        List<Double> returns = portfolioValuationService.buildDailyReturns(positions, barsByTicker);
+
+        if (values.size() < 2 || returns.isEmpty()) return emptyRiskMetrics();
+
+        double maxDrawdown = riskPort.maxDrawdown(values);
+        double concentration = computeHHI(positions, barsByTicker);
+
+        // Beta stubbed until benchmark series is wired — returns neutral 1.0
+        double beta = 1.0;
+
+        // Deltas — same half-split pattern as getSummary
+        int mid = returns.size() / 2;
+        double betaDelta = 0.0;
+        double maxDrawdownDelta = 0.0;
+        double concentrationDelta = 0.0;
+
+        if (mid > 0) {
+            List<Double> firstValues  = values.subList(0, mid + 1);
+            List<Double> secondValues = values.subList(mid, values.size());
+
+            maxDrawdownDelta = riskPort.maxDrawdown(secondValues)
+                    - riskPort.maxDrawdown(firstValues);
+
+            // Concentration doesn't change over sub-periods (it's a snapshot),
+            // so delta is 0 until you store historical snapshots — leave as 0.0
+        }
+
+        // Sparklines — 7-point rolling windows
+        List<Double> drawdownSpark = buildRollingMetric(values, 7, riskPort::maxDrawdown);
+        List<Double> betaSpark     = Collections.nCopies(7, 1.0); // stubbed
+        List<Double> concSpark     = Collections.nCopies(7, concentration);
+
+        return new RiskMetricsDto(
+                beta, betaDelta,
+                maxDrawdown, maxDrawdownDelta,
+                concentration, concentrationDelta,
+                drawdownSpark, betaSpark, concSpark
+        );
+    }
+
+    // HHI: sum of squared weights — ranges 0 (perfectly diversified) to 1 (single position)
+    private double computeHHI(List<PortfolioPosition> positions,
+                              Map<String, List<PriceBar>> barsByTicker) {
+        Map<String, Double> latestPrices = barsByTicker.entrySet().stream()
+                .filter(e -> !e.getValue().isEmpty())
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().getLast().getAdjClose().doubleValue()
+                ));
+
+        double total = positions.stream()
+                .mapToDouble(p -> latestPrices.getOrDefault(p.getAsset().getTicker(), 0.0)
+                        * p.getQuantity().doubleValue())
+                .sum();
+
+        if (total == 0.0) return 0.0;
+
+        return positions.stream()
+                .mapToDouble(p -> {
+                    double val = latestPrices.getOrDefault(p.getAsset().getTicker(), 0.0)
+                            * p.getQuantity().doubleValue();
+                    double w = val / total;
+                    return w * w;
+                })
+                .sum();
+    }
+
+    private RiskMetricsDto emptyRiskMetrics() {
+        List<Double> empty = List.of();
+        return new RiskMetricsDto(0, 0, 0, 0, 0, 0, empty, empty, empty);
+    }
+
+    public CorrelationMatrixDto getCorrelationMatrix(UUID portfolioId, String range, UUID userId) {
+        log.debug("Building correlation matrix portfolioId={} range={}", portfolioId, range);
+
+        Portfolio portfolio = loadWithPositions(portfolioId, userId);
+        List<PortfolioPosition> positions = portfolio.getPositions();
+        if (positions.size() < 2) {
+            // Can't correlate a single asset
+            List<String> tickers = positions.stream()
+                    .map(p -> p.getAsset().getTicker()).toList();
+            return new CorrelationMatrixDto(tickers, List.of(List.of(1.0)));
+        }
+
+        LocalDate to = LocalDate.now();
+        LocalDate from = DateRange.fromValue(range).toStartDate(to);
+
+        List<String> tickers = positions.stream()
+                .map(p -> p.getAsset().getTicker())
+                .distinct()
+                .toList();
+
+        Map<String, List<Double>> returnsByTicker = tickers.stream()
+                .collect(Collectors.toMap(
+                        ticker -> ticker,
+                        ticker -> toReturnsFromBars(
+                                marketDataPort.getHistoricalBars(ticker, from, to))
+                ));
+
+        List<List<Double>> matrix = new ArrayList<>();
+        for (String row : tickers) {
+            List<Double> matrixRow = new ArrayList<>();
+            for (String col : tickers) {
+                if (row.equals(col)) {
+                    matrixRow.add(1.0);
+                } else {
+                    matrixRow.add(pearsonCorrelation(
+                            returnsByTicker.get(row),
+                            returnsByTicker.get(col)
+                    ));
+                }
+            }
+            matrix.add(matrixRow);
+        }
+
+        return new CorrelationMatrixDto(tickers, matrix);
+    }
+
+    private double pearsonCorrelation(List<Double> x, List<Double> y) {
+        int n = Math.min(x.size(), y.size());
+        if (n < 2) return 0.0;
+
+        double meanX = x.subList(0, n).stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double meanY = y.subList(0, n).stream().mapToDouble(Double::doubleValue).average().orElse(0);
+
+        double cov = 0, varX = 0, varY = 0;
+        for (int i = 0; i < n; i++) {
+            double dx = x.get(i) - meanX;
+            double dy = y.get(i) - meanY;
+            cov  += dx * dy;
+            varX += dx * dx;
+            varY += dy * dy;
+        }
+
+        double denom = Math.sqrt(varX * varY);
+        return denom == 0.0 ? 0.0 : cov / denom;
+    }
     // ── Private helpers ──────────────────────────────────────────────────────
 
     private Portfolio loadWithPositions(UUID id, UUID principalId) {
@@ -385,13 +584,12 @@ public class PortfolioQueryService {
 
     private PositionDto emptyPositionDto(PortfolioPosition pos, String ticker, double posValue) {
         return new PositionDto(
-                pos.getId().toString(),
-                ticker,
-                pos.getAsset().getName(),
-                pos.getAsset().getType().name(),
+                pos.getId().toString(), ticker,
+                pos.getAsset().getName(), pos.getAsset().getType().name(),
                 0.0, 0.0, 0.0, 0, "UNKNOWN", "N/A",
                 SeriesUtil.formatPositionValue(posValue),
-                pos.getAsset().getSector().getLabel()
+                pos.getAsset().getSector().getLabel(),
+                0.0, 0.0, 0.0   // ← weight, volatility, volContribution
         );
     }
 
