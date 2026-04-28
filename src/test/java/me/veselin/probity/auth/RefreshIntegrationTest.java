@@ -22,8 +22,8 @@ public class RefreshIntegrationTest extends BaseAuthIntegrationTest {
     void refresh_withValidRefreshToken_returnsNewAccessToken() throws Exception {
         AuthResult tokens = login();
 
-        mockMvc.perform(post(ApiRoutes.Auth.REFRESH)
-                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken())))
+        mockMvc.perform(withCsrf(post(ApiRoutes.Auth.REFRESH)
+                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").exists())
                 .andExpect(jsonPath("$.username").isString())
@@ -37,8 +37,8 @@ public class RefreshIntegrationTest extends BaseAuthIntegrationTest {
     void refresh_rotatesRefreshToken() throws Exception {
         AuthResult tokens = login();
 
-        MvcResult refreshResult = mockMvc.perform(post(ApiRoutes.Auth.REFRESH)
-                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken())))
+        MvcResult refreshResult = mockMvc.perform(withCsrf(post(ApiRoutes.Auth.REFRESH)
+                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").exists())
                 .andExpect(jsonPath("$.username").isString())
@@ -52,13 +52,13 @@ public class RefreshIntegrationTest extends BaseAuthIntegrationTest {
                 .findFirst().orElseThrow();
 
         // old token rejected
-        mockMvc.perform(post(ApiRoutes.Auth.REFRESH)
-                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken())))
+        mockMvc.perform(withCsrf(post(ApiRoutes.Auth.REFRESH)
+                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken()))))
                 .andExpect(status().isUnauthorized());
 
         // new token works
-        mockMvc.perform(post(ApiRoutes.Auth.REFRESH)
-                        .cookie(new Cookie(Token.REFRESH.getCookieName(), newRefreshToken)))
+        mockMvc.perform(withCsrf(post(ApiRoutes.Auth.REFRESH)
+                        .cookie(new Cookie(Token.REFRESH.getCookieName(), newRefreshToken))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").exists())
                 .andExpect(jsonPath("$.username").isString())
@@ -68,8 +68,8 @@ public class RefreshIntegrationTest extends BaseAuthIntegrationTest {
 
     @Test
     void refresh_withInvalidToken_returns401() throws Exception {
-        mockMvc.perform(post(ApiRoutes.Auth.REFRESH)
-                        .cookie(new Cookie(Token.REFRESH.getCookieName(), "notavalidtoken")))
+        mockMvc.perform(withCsrf(post(ApiRoutes.Auth.REFRESH)
+                        .cookie(new Cookie(Token.REFRESH.getCookieName(), "notavalidtoken"))))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Invalid token"));
     }
@@ -78,19 +78,19 @@ public class RefreshIntegrationTest extends BaseAuthIntegrationTest {
     void refresh_afterLogout_returns401() throws Exception {
         AuthResult tokens = login();
 
-        mockMvc.perform(post(ApiRoutes.Auth.LOGOUT)
-                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken())))
+        mockMvc.perform(withCsrf(post(ApiRoutes.Auth.LOGOUT)
+                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken()))))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(post(ApiRoutes.Auth.REFRESH)
-                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken())))
+        mockMvc.perform(withCsrf(post(ApiRoutes.Auth.REFRESH)
+                        .cookie(new Cookie(Token.REFRESH.getCookieName(), tokens.refreshToken()))))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Invalid refresh token"));
     }
 
     @Test
     void refresh_withMissingCookie_returns401() throws Exception {
-        mockMvc.perform(post(ApiRoutes.Auth.REFRESH))
+        mockMvc.perform(withCsrf(post(ApiRoutes.Auth.REFRESH)))
                 .andExpect(status().isUnauthorized());
     }
 }

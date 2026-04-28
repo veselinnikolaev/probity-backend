@@ -13,11 +13,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.util.Arrays;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
     @Autowired AuthCommandPort authCommandPort;
@@ -45,6 +47,22 @@ public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
         String refreshToken = getCookieValue(result, Token.REFRESH.getCookieName());
 
         return new AuthResult(username, role, accessToken, refreshToken);
+    }
+
+    protected MockHttpServletRequestBuilder withCsrf(MockHttpServletRequestBuilder builder) throws Exception {
+        MvcResult csrfResult = mockMvc.perform(get(ApiRoutes.Auth.CSRF))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String csrfToken = Arrays.stream(csrfResult.getResponse().getCookies())
+                .filter(c -> "XSRF-TOKEN".equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No XSRF-TOKEN cookie returned"));
+
+        return builder
+                .cookie(new Cookie("XSRF-TOKEN", csrfToken))
+                .header("X-XSRF-TOKEN", csrfToken);
     }
 
     private String getCookieValue(MvcResult result, String name) {
