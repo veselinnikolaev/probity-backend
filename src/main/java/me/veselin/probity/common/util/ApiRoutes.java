@@ -31,5 +31,6 @@ public final class ApiRoutes {
         public static final String POSITIONS = PORTFOLIO + "/positions";
         public static final String RISK_METRICS = PORTFOLIO + "/risk-metrics";
         public static final String CORRELATION  = PORTFOLIO + "/correlation";
+        public static final String POSITION = PORTFOLIO + "/positions/{positionId}";
     }
 }

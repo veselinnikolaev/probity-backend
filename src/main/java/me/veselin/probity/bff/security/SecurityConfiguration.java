@@ -44,8 +44,6 @@ public class SecurityConfiguration {
                         .ignoringRequestMatchers(
                                 ApiRoutes.Auth.LOGIN,
                                 ApiRoutes.Auth.REGISTER,
-                                ApiRoutes.Auth.REFRESH,
-                                ApiRoutes.Auth.LOGOUT,
                                 ApiRoutes.Auth.CSRF
                         )
                 )

@@ -40,8 +40,8 @@ public class PortfolioPosition extends BaseEntitySoftDelete {
 
     PortfolioPosition(Portfolio portfolio, Asset asset, BigDecimal quantity) {
         this.portfolio = Objects.requireNonNull(portfolio, "portfolio must not be null");
-        this.asset     = Objects.requireNonNull(asset,     "asset must not be null");
-        this.quantity  = validateQuantity(quantity);
+        this.asset = Objects.requireNonNull(asset, "asset must not be null");
+        this.quantity = validateQuantity(quantity);
     }
 
     // -------------------------------------------------------------------------

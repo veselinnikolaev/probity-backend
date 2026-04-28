@@ -70,6 +70,31 @@ public class Portfolio extends BaseEntitySoftDelete {
                 );
     }
 
+    public void updatePositionQuantity(UUID positionId, BigDecimal newQuantity) {
+        requirePositiveQuantity(newQuantity, "updatePositionQuantity");
+
+        PortfolioPosition position = positions.stream()
+                .filter(p -> p.getId().equals(positionId))
+                .findFirst()
+                .orElseThrow(() -> new PositionNotFoundException(
+                        "Position not found: " + positionId));
+
+        // Delta = newQuantity - current, then adjustQuantity handles validation
+        BigDecimal delta = newQuantity.subtract(position.getQuantity());
+        position.adjustQuantity(delta);
+    }
+
+    public void removePosition(UUID positionId) {
+        PortfolioPosition position = positions.stream()
+                .filter(p -> p.getId().equals(positionId))
+                .findFirst()
+                .orElseThrow(() -> new PositionNotFoundException(
+                        "Position not found: " + positionId));
+
+        position.softDelete();
+        positions.remove(position);
+    }
+
     public void reducePosition(Asset asset, BigDecimal quantity) {
         Objects.requireNonNull(asset, "asset must not be null");
         requirePositiveQuantity(quantity, "reducePosition");

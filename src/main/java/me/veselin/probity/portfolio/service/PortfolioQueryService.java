@@ -43,11 +43,46 @@ public class PortfolioQueryService {
 
         return portfolioRepository.findByUserIdWithPositions(userId).stream()
                 .map(p -> {
+                    List<PortfolioPosition> positions = p.getPositions();
+
                     Map<String, Double> prices =
-                            portfolioValuationService.fetchLatestPrices(p.getPositions());
+                            portfolioValuationService.fetchLatestPrices(positions);
                     double total =
-                            portfolioValuationService.computeTotalValue(p.getPositions(), prices);
-                    return new PortfolioDto(p.getId().toString(), p.getName(), total);
+                            portfolioValuationService.computeTotalValue(positions, prices);
+
+                    // Fetch 30d bars for volatility, sharpe, sparkline
+                    LocalDate to = lastTradingDay();
+                    LocalDate from = to.minusDays(30);
+                    Map<String, List<PriceBar>> bars =
+                            portfolioValuationService.fetchBars(positions, from, to);
+
+                    Map<LocalDate, Double> valueByDate =
+                            portfolioValuationService.buildValueSeries(positions, bars);
+                    valueByDate.entrySet().removeIf(e -> e.getValue() == 0.0);
+
+                    List<Double> values = new ArrayList<>(valueByDate.values());
+                    List<Double> returns =
+                            portfolioValuationService.buildDailyReturns(positions, bars);
+
+                    double vol = returns.size() >= 2
+                            ? riskPort.annualisedVolatility(returns) : 0.0;
+                    double sharpe = returns.size() >= 2
+                            ? riskPort.sharpeRatio(returns) : 0.0;
+                    List<Double> spark = SeriesUtil.downsample(values, 7);
+
+                    String createdAt = p.getCreatedAt() != null
+                            ? p.getCreatedAt().toString() : null;
+
+                    return new PortfolioDto(
+                            p.getId().toString(),
+                            p.getName(),
+                            total,
+                            createdAt,
+                            positions.size(),
+                            vol,
+                            sharpe,
+                            spark
+                    );
                 })
                 .toList();
     }
@@ -63,11 +98,45 @@ public class PortfolioQueryService {
                         throw new AccessDeniedException("Access denied to portfolio: " + id);
                     }
 
+                    List<PortfolioPosition> positions = portfolio.getPositions();
+
                     Map<String, Double> prices =
-                            portfolioValuationService.fetchLatestPrices(portfolio.getPositions());
+                            portfolioValuationService.fetchLatestPrices(positions);
                     double total =
-                            portfolioValuationService.computeTotalValue(portfolio.getPositions(), prices);
-                    return new PortfolioDto(id.toString(), portfolio.getName(), total);
+                            portfolioValuationService.computeTotalValue(positions, prices);
+
+                    LocalDate to = lastTradingDay();
+                    LocalDate from = to.minusDays(30);
+                    Map<String, List<PriceBar>> bars =
+                            portfolioValuationService.fetchBars(positions, from, to);
+
+                    Map<LocalDate, Double> valueByDate =
+                            portfolioValuationService.buildValueSeries(positions, bars);
+                    valueByDate.entrySet().removeIf(e -> e.getValue() == 0.0);
+
+                    List<Double> values = new ArrayList<>(valueByDate.values());
+                    List<Double> returns =
+                            portfolioValuationService.buildDailyReturns(positions, bars);
+
+                    double vol = returns.size() >= 2
+                            ? riskPort.annualisedVolatility(returns) : 0.0;
+                    double sharpe = returns.size() >= 2
+                            ? riskPort.sharpeRatio(returns) : 0.0;
+                    List<Double> spark = SeriesUtil.downsample(values, 7);
+
+                    String createdAt = portfolio.getCreatedAt() != null
+                            ? portfolio.getCreatedAt().toString() : null;
+
+                    return new PortfolioDto(
+                            id.toString(),
+                            portfolio.getName(),
+                            total,
+                            createdAt,
+                            positions.size(),
+                            vol,
+                            sharpe,
+                            spark
+                    );
                 }).orElseThrow(() -> new PortfolioNotFoundException("Portfolio not found: " + id));
     }
 
@@ -81,7 +150,7 @@ public class PortfolioQueryService {
 
         if (positions.isEmpty()) return emptyPortfolioSummary();
 
-        LocalDate to = LocalDate.now();
+        LocalDate to = lastTradingDay();
         LocalDate from = DateRange.fromValue(range).toStartDate(to);
 
         Map<String, List<PriceBar>> barsByTicker =
@@ -165,7 +234,7 @@ public class PortfolioQueryService {
         List<PortfolioPosition> positions = portfolio.getPositions();
         if (positions.isEmpty()) return List.of();
 
-        LocalDate to = LocalDate.now();
+        LocalDate to = lastTradingDay();
         LocalDate from = to.minusDays(30);
 
         Map<String, List<PriceBar>> barsByTicker = positions.stream()
@@ -217,7 +286,7 @@ public class PortfolioQueryService {
             double weight = totalValue > 0 ? (posValue / totalValue) * 100 : 0.0;
             double vol = volByTicker.getOrDefault(ticker, 0.0);
             // Weighted volatility contribution: weight% × annualised vol
-            double volContribution = (weight / 100.0) * vol;
+            double volContribution = weight * vol / 100.0;
 
             List<Double> returns = toReturnsFromBars(bars);
             int score = riskPort.riskScore(pos.getAsset().getType().name(), vol);
@@ -290,7 +359,7 @@ public class PortfolioQueryService {
 
         Portfolio portfolio = loadWithPositions(id, principalId);
 
-        LocalDate to = LocalDate.now();
+        LocalDate to = lastTradingDay();
         LocalDate from = DateRange.fromValue(range).toStartDate(to);
 
         Map<LocalDate, Double> valueByDate =
@@ -420,7 +489,7 @@ public class PortfolioQueryService {
         List<PortfolioPosition> positions = portfolio.getPositions();
         if (positions.isEmpty()) return emptyRiskMetrics();
 
-        LocalDate to = LocalDate.now();
+        LocalDate to = lastTradingDay();
         LocalDate from = DateRange.fromValue(range).toStartDate(to);
 
         Map<String, List<PriceBar>> barsByTicker =
@@ -515,7 +584,7 @@ public class PortfolioQueryService {
             return new CorrelationMatrixDto(tickers, List.of(List.of(1.0)));
         }
 
-        LocalDate to = LocalDate.now();
+        LocalDate to = lastTradingDay();
         LocalDate from = DateRange.fromValue(range).toStartDate(to);
 
         List<String> tickers = positions.stream()
@@ -639,5 +708,14 @@ public class PortfolioQueryService {
         SparklineDto empty = new SparklineDto(
                 List.of(), List.of(), List.of(), List.of(), List.of());
         return new PortfolioSummaryDto(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, empty);
+    }
+
+    private LocalDate lastTradingDay() {
+        LocalDate date = LocalDate.now().minusDays(1);
+        while (date.getDayOfWeek() == java.time.DayOfWeek.SATURDAY
+                || date.getDayOfWeek() == java.time.DayOfWeek.SUNDAY) {
+            date = date.minusDays(1);
+        }
+        return date;
     }
 }
