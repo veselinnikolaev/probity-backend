@@ -59,7 +59,7 @@ public class PortfolioIntegrationTest extends BaseAuthIntegrationTest {
                 .orElseThrow();
 
         Portfolio portfolio = Portfolio.create("Test Portfolio", userId);
-        portfolio.addPosition(apple, new BigDecimal("10"));
+        portfolio.addPosition(apple, new BigDecimal("10"), new BigDecimal("148.00"));
         portfolioRepository.save(portfolio);
 
         portfolioId = portfolio.getId().toString();

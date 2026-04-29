@@ -33,4 +33,9 @@ public final class ApiRoutes {
         public static final String CORRELATION  = PORTFOLIO + "/correlation";
         public static final String POSITION = PORTFOLIO + "/positions/{positionId}";
     }
+
+    public static final class Assets {
+        public static final String ASSETS = V1 + "/assets";
+        public static final String SEARCH = ASSETS + "/search";
+    }
 }

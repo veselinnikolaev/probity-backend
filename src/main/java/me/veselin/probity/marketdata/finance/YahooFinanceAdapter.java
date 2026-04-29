@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.marketdata.dto.PriceBarDto;
 import me.veselin.probity.marketdata.exception.MarketDataException;
+import me.veselin.probity.portfolio.dto.AssetMetadataDto;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -34,6 +35,10 @@ public class YahooFinanceAdapter implements FinanceAdapter {
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
+    private static final String QUOTE_SUMMARY_URL =
+            "https://query1.finance.yahoo.com/v11/finance/quoteSummary/%s" +
+                    "?modules=quoteType,assetProfile";
+
     @Override
     public List<PriceBarDto> fetchDailyBars(String ticker, LocalDate from, LocalDate to) {
         long period1 = from.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
@@ -52,6 +57,49 @@ public class YahooFinanceAdapter implements FinanceAdapter {
             throw new MarketDataException("Failed to fetch data for ticker: " + ticker, e);
         }
     }
+
+    @Override
+    public Optional<AssetMetadataDto> fetchMetadata(String ticker) {
+        String url = String.format(QUOTE_SUMMARY_URL, ticker.toUpperCase());
+        log.debug("Fetching metadata ticker={} url={}", ticker, url);
+
+        try {
+            JsonNode root = fetchWithHeaders(url);
+
+            if (root == null) return Optional.empty();
+
+            JsonNode result = root.path("quoteSummary").path("result");
+            if (result.isMissingNode() || result.isNull()
+                    || !result.isArray() || result.isEmpty()) {
+                log.warn("No quoteSummary result for ticker={}", ticker);
+                return Optional.empty();
+            }
+
+            JsonNode first     = result.get(0);
+            JsonNode quoteType = first.path("quoteType");
+            JsonNode profile   = first.path("assetProfile");
+
+            // longName is preferred; shortName is fallback
+            String name = quoteType.path("longName").asText(null);
+            if (name == null || name.isBlank()) {
+                name = quoteType.path("shortName").asText(ticker);
+            }
+
+            String type   = quoteType.path("quoteType").asText("EQUITY");
+            String sector = profile.path("sector").asText(null); // null for ETF/CRYPTO
+
+            log.debug("Resolved metadata ticker={} name='{}' type={} sector={}",
+                    ticker, name, type, sector);
+
+            return Optional.of(new AssetMetadataDto(
+                    ticker.toUpperCase(), name, type, sector));
+
+        } catch (Exception e) {
+            log.warn("fetchMetadata failed for ticker={}: {}", ticker, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 

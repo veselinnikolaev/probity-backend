@@ -57,20 +57,24 @@ public class Portfolio extends BaseEntitySoftDelete {
     // Domain behaviour
     // -------------------------------------------------------------------------
 
-    public void addPosition(Asset asset, BigDecimal quantity) {
+    public PortfolioPosition addPosition(Asset asset, BigDecimal quantity, BigDecimal price) {
         Objects.requireNonNull(asset, "asset must not be null");
         requirePositiveQuantity(quantity, "addPosition");
 
-        positions.stream()
+        PortfolioPosition position = positions.stream()
                 .filter(p -> p.getAsset().getId().equals(asset.getId()))
                 .findFirst()
-                .ifPresentOrElse(
-                        existing -> existing.adjustQuantity(quantity),
-                        () -> positions.add(new PortfolioPosition(this, asset, quantity))
-                );
+                .orElseGet(() -> {
+                    PortfolioPosition p = new PortfolioPosition(this, asset, quantity, price);
+                    positions.add(p);
+                    return p;
+                });
+
+        position.adjustQuantity(quantity, price);
+        return position;
     }
 
-    public void updatePositionQuantity(UUID positionId, BigDecimal newQuantity) {
+    public void updatePositionQuantity(UUID positionId, BigDecimal newQuantity, BigDecimal price) {
         requirePositiveQuantity(newQuantity, "updatePositionQuantity");
 
         PortfolioPosition position = positions.stream()
@@ -81,7 +85,7 @@ public class Portfolio extends BaseEntitySoftDelete {
 
         // Delta = newQuantity - current, then adjustQuantity handles validation
         BigDecimal delta = newQuantity.subtract(position.getQuantity());
-        position.adjustQuantity(delta);
+        position.adjustQuantity(delta, price);
     }
 
     public void removePosition(UUID positionId) {
@@ -95,7 +99,7 @@ public class Portfolio extends BaseEntitySoftDelete {
         positions.remove(position);
     }
 
-    public void reducePosition(Asset asset, BigDecimal quantity) {
+    public void reducePosition(Asset asset, BigDecimal quantity, BigDecimal price) {
         Objects.requireNonNull(asset, "asset must not be null");
         requirePositiveQuantity(quantity, "reducePosition");
 
@@ -108,7 +112,7 @@ public class Portfolio extends BaseEntitySoftDelete {
             positions.remove(position);
         } else {
             // Partial sell — adjust quantity (negative delta)
-            position.adjustQuantity(quantity.negate());
+            position.adjustQuantity(quantity.negate(), price);
         }
     }
 

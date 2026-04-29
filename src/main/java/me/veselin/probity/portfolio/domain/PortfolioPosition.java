@@ -8,6 +8,7 @@ import me.veselin.probity.common.audit.BaseEntitySoftDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Objects;
 
 @Entity
@@ -34,24 +35,37 @@ public class PortfolioPosition extends BaseEntitySoftDelete {
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal quantity;
 
+    @Column(name = "avg_buy_price", precision = 19, scale = 4)
+    private BigDecimal avgBuyPrice;
+
     // -------------------------------------------------------------------------
     // Package-private constructor — called only by Portfolio aggregate root
     // -------------------------------------------------------------------------
 
-    PortfolioPosition(Portfolio portfolio, Asset asset, BigDecimal quantity) {
-        this.portfolio = Objects.requireNonNull(portfolio, "portfolio must not be null");
-        this.asset = Objects.requireNonNull(asset, "asset must not be null");
+    PortfolioPosition(Portfolio portfolio, Asset asset, BigDecimal quantity, BigDecimal price) {
+        this.portfolio = portfolio;
+        this.asset = asset;
         this.quantity = validateQuantity(quantity);
+        this.avgBuyPrice = price;
     }
 
     // -------------------------------------------------------------------------
     // Domain behaviour — package-private, invoked only by Portfolio
     // -------------------------------------------------------------------------
 
-    void adjustQuantity(BigDecimal delta) {
-        Objects.requireNonNull(delta, "delta must not be null");
-        BigDecimal updated = this.quantity.add(delta);
-        this.quantity = validateQuantity(updated);
+    void adjustQuantity(BigDecimal delta, BigDecimal price) {
+        BigDecimal newQty = this.quantity.add(delta);
+
+        if (delta.compareTo(BigDecimal.ZERO) > 0) {
+            // BUY → recalc weighted average
+            BigDecimal totalCost =
+                    this.avgBuyPrice.multiply(this.quantity)
+                            .add(price.multiply(delta));
+
+            this.avgBuyPrice = totalCost.divide(newQty, 4, RoundingMode.HALF_UP);
+        }
+
+        this.quantity = validateQuantity(newQty);
     }
 
     // -------------------------------------------------------------------------

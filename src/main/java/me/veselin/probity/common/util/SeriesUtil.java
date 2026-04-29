@@ -23,7 +23,7 @@ public class SeriesUtil {
         var result = new ArrayList<Double>(targetPoints);
         double step = (double) (series.size() - 1) / (targetPoints - 1);
         for (int i = 0; i < targetPoints; i++) {
-            result.add(series.get((int) Math.round(i * step)));
+            result.add(series.get((int) Math.round(i * step))); // null passes through fine
         }
         return result;
     }

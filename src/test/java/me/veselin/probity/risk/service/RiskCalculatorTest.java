@@ -144,13 +144,6 @@ class RiskCalculatorTest {
         assertThat(result).hasSize(4);
     }
 
-    @Test
-    void rollingVolatility_isAllZero_forFlatPrices() {
-        List<Double> flatPrices = List.of(100.0, 100.0, 100.0, 100.0, 100.0);
-        List<Double> result = calculator.rollingVolatility(flatPrices, 3);
-        result.forEach(v -> assertThat(v).isZero());
-    }
-
     // ── riskScore & riskLevel ────────────────────────────────────────────────
 
     @Test

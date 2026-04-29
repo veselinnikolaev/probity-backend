@@ -126,7 +126,7 @@ public class RiskCalculator implements RiskPort {
         for (int i = 0; i < dailyReturns.size(); i++) {
             int from = Math.max(0, i - windowDays + 1);
             List<Double> window = dailyReturns.subList(from, i + 1);
-            result.add(annualisedVolatility(window));
+            result.add(window.size() < 2 ? null : annualisedVolatility(window));
         }
         return result;
     }

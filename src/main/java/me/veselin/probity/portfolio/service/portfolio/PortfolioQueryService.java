@@ -1,4 +1,4 @@
-package me.veselin.probity.portfolio.service;
+package me.veselin.probity.portfolio.service.portfolio;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,6 +61,8 @@ public class PortfolioQueryService {
                     valueByDate.entrySet().removeIf(e -> e.getValue() == 0.0);
 
                     List<Double> values = new ArrayList<>(valueByDate.values());
+                    log.debug("fetchBars tickers={} from={} to={}",
+                            positions.stream().map(position -> position.getAsset().getTicker()).toList(), from, to);
                     List<Double> returns =
                             portfolioValuationService.buildDailyReturns(positions, bars);
 
@@ -115,6 +117,8 @@ public class PortfolioQueryService {
                     valueByDate.entrySet().removeIf(e -> e.getValue() == 0.0);
 
                     List<Double> values = new ArrayList<>(valueByDate.values());
+                    log.debug("fetchBars tickers={} from={} to={}",
+                            positions.stream().map(p -> p.getAsset().getTicker()).toList(), from, to);
                     List<Double> returns =
                             portfolioValuationService.buildDailyReturns(positions, bars);
 
@@ -164,6 +168,8 @@ public class PortfolioQueryService {
         valueByDate.entrySet().removeIf(e -> e.getValue() == 0.0);
 
         List<Double> portfolioValues = new ArrayList<>(valueByDate.values());
+        log.debug("fetchBars tickers={} from={} to={}",
+                positions.stream().map(p -> p.getAsset().getTicker()).toList(), from, to);
         List<Double> dailyReturns =
                 portfolioValuationService.buildDailyReturns(positions, barsByTicker);
 
@@ -307,7 +313,11 @@ public class PortfolioQueryService {
                     pos.getAsset().getSector().getLabel(),
                     weight,
                     vol,
-                    volContribution
+                    volContribution,
+                    pos.getQuantity().doubleValue(),
+                    pos.getAvgBuyPrice() != null ? pos.getAvgBuyPrice().doubleValue() : price,
+                    price,
+                    posValue
             );
         }).toList();
     }
@@ -380,9 +390,11 @@ public class PortfolioQueryService {
 
         List<VolatilityPointDto> result = new ArrayList<>(rollingVol.size());
         for (int i = 0; i < rollingVol.size(); i++) {
+            Double vol = rollingVol.get(i);
+            if (vol == null) continue;  // skip points where window was too small
             result.add(new VolatilityPointDto(
                     dates.get(offset + i).format(fmt),
-                    rollingVol.get(i)
+                    vol
             ));
         }
 
@@ -500,6 +512,8 @@ public class PortfolioQueryService {
         valueByDate.entrySet().removeIf(e -> e.getValue() == 0.0);
 
         List<Double> values = new ArrayList<>(valueByDate.values());
+        log.debug("fetchBars tickers={} from={} to={}",
+                positions.stream().map(p -> p.getAsset().getTicker()).toList(), from, to);
         List<Double> returns = portfolioValuationService.buildDailyReturns(positions, barsByTicker);
 
         if (values.size() < 2 || returns.isEmpty()) return emptyRiskMetrics();
@@ -658,7 +672,8 @@ public class PortfolioQueryService {
                 0.0, 0.0, 0.0, 0, "UNKNOWN", "N/A",
                 SeriesUtil.formatPositionValue(posValue),
                 pos.getAsset().getSector().getLabel(),
-                0.0, 0.0, 0.0   // ← weight, volatility, volContribution
+                0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0
         );
     }
 
@@ -675,7 +690,7 @@ public class PortfolioQueryService {
     private List<Double> buildRollingMetric(
             List<Double> values, int points, Function<List<Double>, Double> metric) {
 
-        if (values.size() < 2) return Collections.nCopies(points, 0.0);
+        if (values.size() < 2) return Collections.nCopies(points, null);
 
         List<Double> result = new ArrayList<>(points);
         double step = (double) (values.size() - 1) / (points - 1);
@@ -683,7 +698,8 @@ public class PortfolioQueryService {
         for (int i = 0; i < points; i++) {
             int end = Math.min((int) Math.round(i * step) + 1, values.size());
             int start = Math.max(0, end - 30);
-            result.add(metric.apply(values.subList(start, end)));
+            List<Double> slice = values.subList(start, end);
+            result.add(slice.size() < 2 ? null : metric.apply(slice));
         }
         return result;
     }

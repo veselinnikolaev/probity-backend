@@ -11,9 +11,13 @@ public record PositionDto(
         int riskScore,
         String riskLevel,
         String volume,
-        String marketCap,
+        String positionValue,
         String sector,
         double weight,
         double volatility,
-        double volatilityContribution
+        double volatilityContribution,
+        double quantity,
+        double avgBuyPrice,
+        double currentPrice,
+        double positionValueRaw
 ) {}

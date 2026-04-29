@@ -108,54 +108,58 @@ public class MarketDataService implements MarketDataPort {
      */
     private void ensureDataExists(String ticker, LocalDate from, LocalDate to) {
         // Hard ceiling: never request data Yahoo Finance hasn't published yet.
+        log.info("ensureDataExists ENTER ticker={} from={} to={}", ticker, from, to); // ← INFO so it always prints
         LocalDate safeTo = clampToLastCompletedTradingDay(to);
+        log.info("ensureDataExists ticker={} safeTo={} safeFrom-raw={}", ticker, safeTo, from);
         if (from.isAfter(safeTo)) {
-            log.debug("Skipping fetch for ticker={}: requested range is entirely in the future", ticker);
+            log.info("Skipping: from {} is after safeTo {}", from, safeTo);
             return;
         }
         LocalDate safeFrom = isWeekend(from) ? nextTradingDay(from) : from;
-        if (safeFrom.isAfter(safeTo)) return;
+        log.info("ensureDataExists ticker={} safeFrom={}", ticker, safeFrom);
+        if (safeFrom.isAfter(safeTo)) {
+            log.info("Skipping: safeFrom {} is after safeTo {}", safeFrom, safeTo); // ← make this visible
+            return;
+        }
 
         Object lock = tickerLocks.computeIfAbsent(ticker, k -> new Object());
 
         synchronized (lock) {
-            Optional<LocalDate> minOpt = priceBarRepository.findMinBarDate(ticker, safeFrom, safeTo);
-            Optional<LocalDate> maxOpt = priceBarRepository.findMaxBarDate(ticker, safeFrom, safeTo);
+            synchronized (lock) {
+                try {
+                    Optional<LocalDate> minOpt = priceBarRepository.findMinBarDate(ticker, safeFrom, safeTo);
+                    Optional<LocalDate> maxOpt = priceBarRepository.findMaxBarDate(ticker, safeFrom, safeTo);
 
-            if (minOpt.isEmpty()) {
-                // No data at all for this range — fetch everything in one shot.
-                log.debug("No data in DB for ticker={} range={} - {} → fetching full range", ticker, safeFrom, safeTo);
-                syncService.fetchAndPersist(ticker, safeFrom, safeTo);
-                return;
-            }
+                    log.info("gap check ticker={} minOpt={} maxOpt={}", ticker, minOpt, maxOpt);
 
-            LocalDate min = minOpt.get();
-            LocalDate max = maxOpt.get();
+                    if (minOpt.isEmpty()) {
+                        log.info("No data → full fetch ticker={} {} - {}", ticker, safeFrom, safeTo);
+                        syncService.fetchAndPersist(ticker, safeFrom, safeTo);
+                        return;
+                    }
 
-            // Left gap: [from .. min - 1]
-            // e.g. DB has Jan 5–31 but we need Jan 2–31 → fetch Jan 2–4.
-            if (min.isAfter(safeFrom)) {
-                LocalDate leftTo = prevTradingDay(min);
-                if (!leftTo.isBefore(safeFrom)) {
-                    log.debug("Left gap detected for ticker={}: fetching {} - {}", ticker, safeFrom, leftTo);
-                    syncService.fetchAndPersist(ticker, safeFrom, leftTo);
+                    LocalDate min = minOpt.get();
+                    LocalDate max = maxOpt.get();
+
+                    if (min.isAfter(safeFrom)) {
+                        LocalDate leftTo = prevTradingDay(min);
+                        log.info("Left gap ticker={} leftFrom={} leftTo={}", ticker, safeFrom, leftTo);
+                        if (!leftTo.isBefore(safeFrom)) {
+                            syncService.fetchAndPersist(ticker, safeFrom, leftTo);
+                        }
+                    }
+
+                    if (max.isBefore(safeTo)) {
+                        LocalDate rightFrom = nextTradingDay(max);
+                        log.info("Right gap ticker={} rightFrom={} rightTo={}", ticker, rightFrom, safeTo);
+                        if (!rightFrom.isAfter(safeTo)) {
+                            syncService.fetchAndPersist(ticker, rightFrom, safeTo);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("Exception inside synchronized block ticker={}", ticker, e);
                 }
             }
-
-            // Right gap: [max + 1 .. safeTo]
-            // e.g. DB has Jan 2–28 but we need Jan 2–31 → fetch Jan 29–31.
-            if (max.isBefore(safeTo)) {
-                LocalDate rightFrom = nextTradingDay(max);
-                if (!rightFrom.isAfter(safeTo)) {
-                    log.debug("Right gap detected for ticker={}: fetching {} - {}", ticker, rightFrom, safeTo);
-                    syncService.fetchAndPersist(ticker, rightFrom, safeTo);
-                }
-            }
-
-            // Note: interior gaps (e.g. DB has Jan 2–10 and Jan 15–31, missing Jan 11–14)
-            // are not detected here. A full gap-scan would require fetching all stored
-            // dates and diffing against expected trading days. That is deferred until
-            // a dedicated reconciliation job is introduced.
         }
     }
 

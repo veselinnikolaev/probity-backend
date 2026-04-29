@@ -1,4 +1,4 @@
-package me.veselin.probity.portfolio.service;
+package me.veselin.probity.portfolio.service.portfolio;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -59,6 +59,7 @@ public class PortfolioValuationService {
 
             try {
                 List<PriceBar> bars = marketDataPort.getHistoricalBars(ticker, from, to);
+                log.info("fetchBars ticker={} bars.size()={}", ticker, bars == null ? "null" : bars.size());
                 if (bars != null && !bars.isEmpty()) {
                     result.put(ticker, bars);
                 } else {
@@ -156,7 +157,10 @@ public class PortfolioValuationService {
     public List<Double> buildDailyReturns(
             List<PortfolioPosition> positions,
             Map<String, List<PriceBar>> barsByTicker) {
-
+        log.info("buildDailyReturns barsByTicker keys={} sizes={}",
+                barsByTicker.keySet(),
+                barsByTicker.entrySet().stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().size())));
         if (barsByTicker.isEmpty()) {
             log.warn("No bar data available for return calculation");
             return List.of();

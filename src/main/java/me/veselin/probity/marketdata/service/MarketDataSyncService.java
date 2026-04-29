@@ -30,7 +30,7 @@ public class MarketDataSyncService {
      * entirely of market holidays (e.g. a range of [Jan 1, Jan 1]).
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    protected void fetchAndPersist(String ticker, LocalDate from, LocalDate to) {
+    public void fetchAndPersist(String ticker, LocalDate from, LocalDate to) {
         log.debug("Fetching bars from adapter ticker={} range={} - {}", ticker, from, to);
 
         List<PriceBarDto> bars;
