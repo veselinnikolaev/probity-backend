@@ -43,12 +43,12 @@ public class Portfolio extends BaseEntitySoftDelete {
     // -------------------------------------------------------------------------
 
     public static Portfolio create(String name, UUID userId) {
-        Objects.requireNonNull(name,   "name must not be null");
+        Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(userId, "userId must not be null");
         if (name.isBlank()) throw new IllegalArgumentException("Portfolio name must not be blank");
 
         Portfolio p = new Portfolio();
-        p.name   = name.trim();
+        p.name = name.trim();
         p.userId = userId;
         return p;
     }
@@ -61,16 +61,22 @@ public class Portfolio extends BaseEntitySoftDelete {
         Objects.requireNonNull(asset, "asset must not be null");
         requirePositiveQuantity(quantity, "addPosition");
 
+        boolean[] isNew = {false};
+
         PortfolioPosition position = positions.stream()
                 .filter(p -> p.getAsset().getId().equals(asset.getId()))
                 .findFirst()
                 .orElseGet(() -> {
+                    isNew[0] = true;
                     PortfolioPosition p = new PortfolioPosition(this, asset, quantity, price);
                     positions.add(p);
                     return p;
                 });
 
-        position.adjustQuantity(quantity, price);
+        if (!isNew[0]) {
+            position.adjustQuantity(quantity, price);
+        }
+
         return position;
     }
 

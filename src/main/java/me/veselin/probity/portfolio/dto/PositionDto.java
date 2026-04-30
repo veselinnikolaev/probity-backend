@@ -19,5 +19,7 @@ public record PositionDto(
         double quantity,
         double avgBuyPrice,
         double currentPrice,
-        double positionValueRaw
+        double positionValueRaw,
+        double dailyReturn,
+        double riskContribution
 ) {}

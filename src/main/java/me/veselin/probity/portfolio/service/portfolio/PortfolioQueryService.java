@@ -317,7 +317,9 @@ public class PortfolioQueryService {
                     pos.getQuantity().doubleValue(),
                     pos.getAvgBuyPrice() != null ? pos.getAvgBuyPrice().doubleValue() : price,
                     price,
-                    posValue
+                    posValue,
+                    changePct,
+                    volContribution
             );
         }).toList();
     }
@@ -673,7 +675,8 @@ public class PortfolioQueryService {
                 SeriesUtil.formatPositionValue(posValue),
                 pos.getAsset().getSector().getLabel(),
                 0.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 0.0
+                0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0
         );
     }
 

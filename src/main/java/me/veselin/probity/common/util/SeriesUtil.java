@@ -12,10 +12,9 @@ public class SeriesUtil {
     }
 
     public static String formatPositionValue(double value) {
-        if (value >= 1_000_000_000.0) return "%.2fB".formatted(value / 1_000_000_000.0);
-        if (value >= 1_000_000.0)     return "%.2fM".formatted(value / 1_000_000.0);
-        if (value >= 1_000.0)         return "%.1fK".formatted(value / 1_000.0);
-        return "$%.0f".formatted(value);
+        if (value >= 1_000_000) return String.format("$%.2fM", value / 1_000_000);
+        if (value >= 1_000)     return String.format("$%.2fK", value / 1_000);
+        return String.format("$%.2f", value);
     }
 
     public static List<Double> downsample(List<Double> series, int targetPoints) {

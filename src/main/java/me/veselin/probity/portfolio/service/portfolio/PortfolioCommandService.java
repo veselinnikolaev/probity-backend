@@ -10,10 +10,8 @@ import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.portfolio.domain.Asset;
 import me.veselin.probity.portfolio.domain.Portfolio;
 import me.veselin.probity.portfolio.domain.PortfolioPosition;
-import me.veselin.probity.portfolio.exception.AssetNotFoundException;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
 import me.veselin.probity.portfolio.exception.PositionNotFoundException;
-import me.veselin.probity.portfolio.repository.AssetRepository;
 import me.veselin.probity.portfolio.repository.PortfolioRepository;
 import me.veselin.probity.portfolio.service.asset.AssetResolver;
 import org.springframework.security.access.AccessDeniedException;
@@ -54,8 +52,13 @@ public class PortfolioCommandService {
 
         BigDecimal currentPrice = marketDataPort.getLatestPrice(asset.getTicker());
 
-        PortfolioPosition saved = portfolio.addPosition(asset, request.quantity(), currentPrice);
-        portfolioRepository.save(portfolio);
+        PortfolioPosition position = portfolio.addPosition(asset, request.quantity(), currentPrice);
+        portfolioRepository.saveAndFlush(portfolio);
+
+        PortfolioPosition saved = portfolio.getPositions().stream()
+                .filter(p -> p.getAsset().getId().equals(asset.getId()))
+                .findFirst()
+                .orElseThrow();
 
         return new PositionCreatedDto(
                 saved.getId().toString(),
