@@ -13,6 +13,7 @@ import me.veselin.probity.bff.dto.auth.LoginRequest;
 import me.veselin.probity.bff.dto.auth.RegisterRequest;
 import me.veselin.probity.auth.dto.AuthResult;
 import me.veselin.probity.auth.port.AuthCommandPort;
+import me.veselin.probity.bff.security.rate_limit.RateLimit;
 import me.veselin.probity.common.util.ApiRoutes;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -37,6 +38,7 @@ public class AuthController {
     }
 
     @PostMapping(ApiRoutes.Auth.REGISTER)
+    @RateLimit(requests = 3, seconds = 60)
     public ResponseEntity<Void> register(@Valid @RequestBody RegisterRequest request) {
         authCommandPort.register(
                 new RegisterCommand(request.username(), request.email(), request.password())
@@ -45,6 +47,7 @@ public class AuthController {
     }
 
     @PostMapping(ApiRoutes.Auth.LOGIN)
+    @RateLimit(requests = 5, seconds = 60)
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
                                               HttpServletResponse response) {
         AuthResult result = authCommandPort.login(

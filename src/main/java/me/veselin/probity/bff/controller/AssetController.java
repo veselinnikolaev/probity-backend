@@ -1,6 +1,7 @@
 package me.veselin.probity.bff.controller;
 
 import lombok.RequiredArgsConstructor;
+import me.veselin.probity.bff.security.rate_limit.RateLimit;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.portfolio.dto.AssetSearchResultDto;
 import me.veselin.probity.portfolio.service.asset.AssetQueryService;
@@ -23,6 +24,7 @@ public class AssetController {
      * Phase 2: Yahoo Finance probe if ticker not in DB (handles unknown tickers)
      */
     @GetMapping(ApiRoutes.Assets.SEARCH)
+    @RateLimit(requests = 30, seconds = 60)
     public ResponseEntity<List<AssetSearchResultDto>> search(
             @RequestParam(name = "q", defaultValue = "") String q) {
 

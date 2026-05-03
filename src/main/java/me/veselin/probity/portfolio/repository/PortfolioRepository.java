@@ -27,5 +27,7 @@ public interface PortfolioRepository extends JpaRepository<Portfolio, UUID> {
                 WHERE p.userId = :userId
             """)
     List<Portfolio> findByUserIdWithPositions(@Param("userId") UUID userId);
+
+    boolean existsByNameAndUserId(String name, UUID userId);
 }
 

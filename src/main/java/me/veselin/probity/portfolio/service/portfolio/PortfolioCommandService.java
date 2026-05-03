@@ -10,6 +10,7 @@ import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.portfolio.domain.Asset;
 import me.veselin.probity.portfolio.domain.Portfolio;
 import me.veselin.probity.portfolio.domain.PortfolioPosition;
+import me.veselin.probity.portfolio.exception.DuplicatePortfolioException;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
 import me.veselin.probity.portfolio.exception.PositionNotFoundException;
 import me.veselin.probity.portfolio.repository.PortfolioRepository;
@@ -32,6 +33,9 @@ public class PortfolioCommandService {
     private final MarketDataPort marketDataPort;
 
     public PortfolioCreatedDto create(String name, UUID userId) {
+        if (portfolioRepository.existsByNameAndUserId(name, userId)) {
+            throw new DuplicatePortfolioException("Portfolio '" + name + "' already exists");
+        }
         Portfolio saved = portfolioRepository.save(Portfolio.create(name, userId));
         return new PortfolioCreatedDto(saved.getId().toString(), saved.getName());
     }
@@ -55,15 +59,10 @@ public class PortfolioCommandService {
         PortfolioPosition position = portfolio.addPosition(asset, request.quantity(), currentPrice);
         portfolioRepository.saveAndFlush(portfolio);
 
-        PortfolioPosition saved = portfolio.getPositions().stream()
-                .filter(p -> p.getAsset().getId().equals(asset.getId()))
-                .findFirst()
-                .orElseThrow();
-
         return new PositionCreatedDto(
-                saved.getId().toString(),
+                position.getId().toString(),
                 asset.getTicker(),
-                saved.getQuantity()
+                position.getQuantity()
         );
     }
 

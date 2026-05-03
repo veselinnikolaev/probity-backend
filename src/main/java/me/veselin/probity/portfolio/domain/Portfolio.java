@@ -61,23 +61,18 @@ public class Portfolio extends BaseEntitySoftDelete {
         Objects.requireNonNull(asset, "asset must not be null");
         requirePositiveQuantity(quantity, "addPosition");
 
-        boolean[] isNew = {false};
-
-        PortfolioPosition position = positions.stream()
+        return positions.stream()
                 .filter(p -> p.getAsset().getId().equals(asset.getId()))
                 .findFirst()
+                .map(existing -> {
+                    existing.adjustQuantity(quantity, price);
+                    return existing;
+                })
                 .orElseGet(() -> {
-                    isNew[0] = true;
                     PortfolioPosition p = new PortfolioPosition(this, asset, quantity, price);
                     positions.add(p);
                     return p;
                 });
-
-        if (!isNew[0]) {
-            position.adjustQuantity(quantity, price);
-        }
-
-        return position;
     }
 
     public void updatePositionQuantity(UUID positionId, BigDecimal newQuantity, BigDecimal price) {
