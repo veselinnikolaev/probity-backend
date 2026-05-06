@@ -12,4 +12,9 @@ public record RiskMetricsDto(
         List<Double> maxDrawdownSparkline,
         List<Double> betaSparkline,
         List<Double> concentrationSparkline
-) {}
+) {
+    public static RiskMetricsDto empty() {
+        List<Double> empty = List.of();
+        return new RiskMetricsDto(0, 0, 0, 0, 0, 0, empty, empty, empty);
+    }
+}

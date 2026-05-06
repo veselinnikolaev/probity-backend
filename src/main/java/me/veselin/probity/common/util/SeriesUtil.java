@@ -3,7 +3,10 @@ package me.veselin.probity.common.util;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SeriesUtil {
+public final class SeriesUtil {
+
+    private SeriesUtil() {}
+
     public static String formatVolume(Long volume) {
         if (volume == null) return "N/A";
         if (volume >= 1_000_000) return "%.1fM".formatted(volume / 1_000_000.0);

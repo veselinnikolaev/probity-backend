@@ -6,11 +6,11 @@ import me.veselin.probity.bff.dto.portfolio.PortfolioCreatedDto;
 import me.veselin.probity.bff.dto.portfolio.PositionCreateRequest;
 import me.veselin.probity.bff.dto.portfolio.PositionCreatedDto;
 import me.veselin.probity.bff.dto.portfolio.PositionUpdateRequest;
+import me.veselin.probity.common.exception.ConflictException;
 import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.portfolio.domain.Asset;
 import me.veselin.probity.portfolio.domain.Portfolio;
 import me.veselin.probity.portfolio.domain.PortfolioPosition;
-import me.veselin.probity.portfolio.exception.DuplicatePortfolioException;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
 import me.veselin.probity.portfolio.exception.PositionNotFoundException;
 import me.veselin.probity.portfolio.repository.PortfolioRepository;
@@ -34,7 +34,7 @@ public class PortfolioCommandService {
 
     public PortfolioCreatedDto create(String name, UUID userId) {
         if (portfolioRepository.existsByNameAndUserId(name, userId)) {
-            throw new DuplicatePortfolioException("Portfolio '" + name + "' already exists");
+            throw new ConflictException("Portfolio '" + name + "' already exists");
         }
         Portfolio saved = portfolioRepository.save(Portfolio.create(name, userId));
         return new PortfolioCreatedDto(saved.getId().toString(), saved.getName());

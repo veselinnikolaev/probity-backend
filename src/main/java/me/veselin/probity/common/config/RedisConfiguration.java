@@ -1,5 +1,6 @@
 package me.veselin.probity.common.config;
 
+import io.lettuce.core.RedisClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -46,5 +47,10 @@ public class RedisConfiguration {
         config.setUsername(username);
         config.setDatabase(database);
         return new LettuceConnectionFactory(config);
+    }
+
+    @Bean
+    public RedisClient lettuceRedisClient(LettuceConnectionFactory factory) {
+        return (RedisClient) factory.getNativeClient();
     }
 }

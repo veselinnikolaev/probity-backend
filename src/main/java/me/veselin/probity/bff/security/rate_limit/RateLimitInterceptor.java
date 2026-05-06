@@ -1,31 +1,20 @@
 package me.veselin.probity.bff.security.rate_limit;
 
-import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import me.veselin.probity.bff.security.rate_limit.store.BucketStore;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-import java.time.Duration;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 @Component
+@RequiredArgsConstructor
 public class RateLimitInterceptor implements HandlerInterceptor {
 
-    // key = "IP:ClassName:methodName"
-    private final Map<String, Bucket> buckets = Collections.synchronizedMap(
-            new LinkedHashMap<>(1024, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<String, Bucket> eldest) {
-                    return size() > 10_000;
-                }
-            }
-    );
+    private final BucketStore bucketStore;
 
     @Override
     public boolean preHandle(HttpServletRequest request,
@@ -35,25 +24,13 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         if (!(handler instanceof HandlerMethod method)) return true;
 
         RateLimit annotation = method.getMethodAnnotation(RateLimit.class);
-        if (annotation == null) return true; // no annotation = no limit
+        if (annotation == null) return true;
 
         String key = request.getRemoteAddr()
                 + ":" + method.getBeanType().getSimpleName()
                 + ":" + method.getMethod().getName();
 
-        Bucket bucket;
-        synchronized (buckets) {
-            bucket = buckets.computeIfAbsent(key, k ->
-                    Bucket.builder()
-                            .addLimit(Bandwidth.builder()
-                                    .capacity(annotation.requests())
-                                    .refillGreedy(annotation.requests(),
-                                            Duration.ofSeconds(annotation.seconds())
-                                    ).build())
-                            .build()
-            );
-        }
-
+        Bucket bucket = bucketStore.getOrCreate(key, annotation);
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
         if (probe.isConsumed()) {

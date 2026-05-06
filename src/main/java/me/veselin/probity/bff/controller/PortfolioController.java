@@ -7,6 +7,7 @@ import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.portfolio.dto.*;
 import me.veselin.probity.portfolio.service.portfolio.PortfolioCommandService;
 import me.veselin.probity.portfolio.service.portfolio.PortfolioQueryService;
+import me.veselin.probity.portfolio.dto.VaRReportDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -92,6 +93,18 @@ public class PortfolioController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         return ResponseEntity.ok(portfolioQueryService.getCorrelationMatrix(id, range, principal.id()));
+    }
+
+    @GetMapping(ApiRoutes.Portfolios.VAR)
+    public ResponseEntity<VaRReportDto> getVaRReport(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0.95") double confidenceLevel,
+            @RequestParam(defaultValue = "1") int timeHorizonDays,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(
+                portfolioQueryService.getVaRReport(id, confidenceLevel, timeHorizonDays, principal.id())
+        );
     }
 
     @PostMapping(ApiRoutes.Portfolios.PORTFOLIOS)

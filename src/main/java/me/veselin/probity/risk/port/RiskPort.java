@@ -1,6 +1,10 @@
 package me.veselin.probity.risk.port;
 
+import me.veselin.probity.marketdata.domain.PriceBar;
+import me.veselin.probity.portfolio.domain.PortfolioPosition;
+
 import java.util.List;
+import java.util.Map;
 
 public interface RiskPort {
 
@@ -51,4 +55,19 @@ public interface RiskPort {
      * Returns percentage of portfolio value, or 0 if no drawdown
      */
     double maxDrawdown(List<Double> portfolioValues);
+
+    /**
+     * Highest high-interest-day (HHI) as a percentage of portfolio value.
+     */
+    double computeHHI(List<PortfolioPosition> positions,
+                      Map<String, List<PriceBar>> barsByTicker);
+
+    /**
+     * Calculates the Pearson correlation between two datasets.
+     *
+     * @param x first dataset (X values)
+     * @param y second dataset (Y values, paired with X by index)
+     * @return correlation coefficient in range [-1, 1]
+     */
+    double pearsonCorrelation(List<Double> x, List<Double> y);
 }

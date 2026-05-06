@@ -21,7 +21,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class MarketDataSyncServiceTest {
+class MarketDataServiceTest {
 
     @Mock PriceBarRepository repository;
     @Mock FinanceAdapter financeAdapter;

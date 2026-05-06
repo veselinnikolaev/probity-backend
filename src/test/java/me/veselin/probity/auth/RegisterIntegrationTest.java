@@ -87,7 +87,7 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
                                     "email": "%s",
                                     "password": "weakpassword"
                                 }
-                                """, NEW_USER_USERNAME, NEW_USER_PASSWORD)))
+                                """, NEW_USER_USERNAME, NEW_USER_EMAIL)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fields.password").exists());
     }

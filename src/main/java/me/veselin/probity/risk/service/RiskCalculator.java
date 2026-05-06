@@ -1,5 +1,8 @@
 package me.veselin.probity.risk.service;
 
+import me.veselin.probity.common.util.DataUtil;
+import me.veselin.probity.marketdata.domain.PriceBar;
+import me.veselin.probity.portfolio.domain.PortfolioPosition;
 import me.veselin.probity.portfolio.enumeration.AssetType;
 import me.veselin.probity.risk.enumeration.RiskLevel;
 import me.veselin.probity.risk.port.RiskPort;
@@ -8,6 +11,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class RiskCalculator implements RiskPort {
@@ -23,8 +28,8 @@ public class RiskCalculator implements RiskPort {
     @Override
     public double annualisedVolatility(List<Double> dailyReturns) {
         if (dailyReturns.size() < 2) return 0.0;
-        double mean = mean(dailyReturns);
-        double variance = variance(dailyReturns, mean);
+        double mean = DataUtil.mean(dailyReturns);
+        double variance = DataUtil.variance(dailyReturns, mean);
         return Math.sqrt(variance) * Math.sqrt(TRADING_DAYS) * 100; // as percentage
     }
 
@@ -32,8 +37,8 @@ public class RiskCalculator implements RiskPort {
     public double sharpeRatio(List<Double> dailyReturns) {
         if (dailyReturns.size() < 2) return 0.0;
 
-        double mean = mean(dailyReturns);
-        double stdDev = Math.sqrt(variance(dailyReturns, mean));
+        double mean = DataUtil.mean(dailyReturns);
+        double stdDev = Math.sqrt(DataUtil.variance(dailyReturns, mean));
         if (stdDev == 0) return 0.0;
 
         // Convert annual RF to daily
@@ -47,8 +52,8 @@ public class RiskCalculator implements RiskPort {
     public double var95(double portfolioValue, List<Double> dailyReturns) {
         if (dailyReturns.size() < 2) return 0.0;
 
-        double mean = mean(dailyReturns);
-        double stdDev = Math.sqrt(variance(dailyReturns, mean));
+        double mean = DataUtil.mean(dailyReturns);
+        double stdDev = Math.sqrt(DataUtil.variance(dailyReturns, mean));
 
         // Dollar VaR: portfolioValue × Z × σ
         return portfolioValue * Z_95 * stdDev;
@@ -105,23 +110,56 @@ public class RiskCalculator implements RiskPort {
         return maxDd * 100; // return as percentage
     }
 
-    // ── Math helpers — package-private so MonteCarloEngine can reuse ─────────
+    // HHI: sum of squared weights — ranges 0 (perfectly diversified) to 1 (single position)
+    @Override
+    public double computeHHI(List<PortfolioPosition> positions,
+                              Map<String, List<PriceBar>> barsByTicker) {
+        Map<String, Double> latestPrices = barsByTicker.entrySet().stream()
+                .filter(e -> !e.getValue().isEmpty())
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().getLast().getAdjClose().doubleValue()
+                ));
 
-    double mean(List<Double> values) {
-        return values.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+        double total = positions.stream()
+                .mapToDouble(p -> latestPrices.getOrDefault(p.getAsset().getTicker(), 0.0)
+                        * p.getQuantity().doubleValue())
+                .sum();
+
+        if (total == 0.0) return 0.0;
+
+        return positions.stream()
+                .mapToDouble(p -> {
+                    double val = latestPrices.getOrDefault(p.getAsset().getTicker(), 0.0)
+                            * p.getQuantity().doubleValue();
+                    double w = val / total;
+                    return w * w;
+                })
+                .sum();
     }
 
-    double variance(List<Double> values, double mean) {
-        return values.stream()
-                .mapToDouble(v -> Math.pow(v - mean, 2))
-                .average().orElse(0.0);
+    @Override
+    public double pearsonCorrelation(List<Double> x, List<Double> y) {
+        int n = Math.min(x.size(), y.size());
+        if (n < 2) return 0.0;
+
+        double meanX = x.subList(0, n).stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double meanY = y.subList(0, n).stream().mapToDouble(Double::doubleValue).average().orElse(0);
+
+        double cov = 0, varX = 0, varY = 0;
+        for (int i = 0; i < n; i++) {
+            double dx = x.get(i) - meanX;
+            double dy = y.get(i) - meanY;
+            cov += dx * dy;
+            varX += dx * dx;
+            varY += dy * dy;
+        }
+
+        double denom = Math.sqrt(varX * varY);
+        return denom == 0.0 ? 0.0 : cov / denom;
     }
 
-    double stdDev(List<Double> values) {
-        return Math.sqrt(variance(values, mean(values)));
-    }
-
-    private List<Double> calculateRollingVolatility(List<Double> dailyReturns, int windowDays) {
+    protected List<Double> calculateRollingVolatility(List<Double> dailyReturns, int windowDays) {
         var result = new ArrayList<Double>(dailyReturns.size());
         for (int i = 0; i < dailyReturns.size(); i++) {
             int from = Math.max(0, i - windowDays + 1);

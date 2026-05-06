@@ -3,6 +3,7 @@ package me.veselin.probity.auth;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import me.veselin.probity.BaseIntegrationTest;
+import me.veselin.probity.RateLimitTestConfig;
 import me.veselin.probity.auth.dto.RegisterCommand;
 import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.auth.port.AuthCommandPort;
@@ -10,6 +11,7 @@ import me.veselin.probity.auth.dto.AuthResult;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.common.exception.ConflictException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -21,6 +23,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
+@Import(RateLimitTestConfig.class)
 public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
     @Autowired AuthCommandPort authCommandPort;
     @Autowired MockMvc mockMvc;

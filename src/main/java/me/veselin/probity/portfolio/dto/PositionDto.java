@@ -1,5 +1,8 @@
 package me.veselin.probity.portfolio.dto;
 
+import me.veselin.probity.common.util.SeriesUtil;
+import me.veselin.probity.portfolio.domain.PortfolioPosition;
+
 public record PositionDto(
         String id,
         String ticker,
@@ -22,4 +25,17 @@ public record PositionDto(
         double positionValueRaw,
         double dailyReturn,
         double riskContribution
-) {}
+) {
+    public static PositionDto empty(PortfolioPosition pos, String ticker, double posValue) {
+        return new PositionDto(
+                pos.getId().toString(), ticker,
+                pos.getAsset().getName(), pos.getAsset().getType().name(),
+                0.0, 0.0, 0.0, 0, "UNKNOWN", "N/A",
+                SeriesUtil.formatPositionValue(posValue),
+                pos.getAsset().getSector().getLabel(),
+                0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0
+        );
+    }
+}
