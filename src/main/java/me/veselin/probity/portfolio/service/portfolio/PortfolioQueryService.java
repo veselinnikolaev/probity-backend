@@ -14,6 +14,7 @@ import me.veselin.probity.portfolio.enumeration.AssetType;
 import me.veselin.probity.portfolio.enumeration.DateRange;
 import me.veselin.probity.portfolio.enumeration.Sector;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
+import me.veselin.probity.portfolio.port.PortfolioPort;
 import me.veselin.probity.portfolio.repository.PortfolioRepository;
 import me.veselin.probity.risk.port.RiskPort;
 import org.springframework.security.access.AccessDeniedException;
@@ -30,12 +31,25 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 @Slf4j
 @RequiredArgsConstructor
-public class PortfolioQueryService {
+public class PortfolioQueryService implements PortfolioPort {
 
     private static final int MIN_RETURNS_FOR_METRICS = 5;
     private final PortfolioRepository portfolioRepository;
     private final MarketDataPort marketDataPort;
     private final RiskPort riskPort;
+
+    @Override
+    public Portfolio loadPortfolioWithPositions(UUID id, UUID principalId) {
+        Portfolio portfolio = portfolioRepository.findByIdWithPositions(id)
+                .orElseThrow(() -> {
+                    log.error("Portfolio not found id={}", id);
+                    return new PortfolioNotFoundException("Portfolio not found: " + id);
+                });
+        if (!portfolio.getUserId().equals(principalId)) {
+            throw new AccessDeniedException("Access denied to portfolio: " + id);
+        }
+        return portfolio;
+    }
 
     // ── Portfolios list ──────────────────────────────────────────────────────
 
@@ -150,7 +164,7 @@ public class PortfolioQueryService {
     public PortfolioSummaryDto getSummary(UUID id, String range, UUID principalId) {
         log.debug("Building summary portfolioId={} range={}", id, range);
 
-        Portfolio portfolio = loadWithPositions(id, principalId);
+        Portfolio portfolio = loadPortfolioWithPositions(id, principalId);
         List<PortfolioPosition> positions = portfolio.getPositions();
 
         if (positions.isEmpty()) return PortfolioSummaryDto.empty();
@@ -237,7 +251,7 @@ public class PortfolioQueryService {
     // ── Positions ────────────────────────────────────────────────────────────
 
     public List<PositionDto> getPositions(UUID id, UUID principalId) {
-        Portfolio portfolio = loadWithPositions(id, principalId);
+        Portfolio portfolio = loadPortfolioWithPositions(id, principalId);
         List<PortfolioPosition> positions = portfolio.getPositions();
         if (positions.isEmpty()) return List.of();
 
@@ -329,7 +343,7 @@ public class PortfolioQueryService {
     public List<CompositionEntryDto> getComposition(UUID id, UUID principalId) {
         log.debug("Building composition portfolioId={}", id);
 
-        Portfolio portfolio = loadWithPositions(id, principalId);
+        Portfolio portfolio = loadPortfolioWithPositions(id, principalId);
 
         // Fetch all prices once up front rather than once per position in forEach.
         Map<String, Double> priceByTicker = portfolio.getPositions().stream()
@@ -369,7 +383,7 @@ public class PortfolioQueryService {
     public List<VolatilityPointDto> getVolatility(UUID id, String range, UUID principalId) {
         log.debug("Calculating volatility portfolioId={} range={}", id, range);
 
-        Portfolio portfolio = loadWithPositions(id, principalId);
+        Portfolio portfolio = loadPortfolioWithPositions(id, principalId);
 
         LocalDate to = TradingUtil.lastCompletedTradingDay();
         LocalDate from = DateRange.fromValue(range).toStartDate(to);
@@ -410,7 +424,7 @@ public class PortfolioQueryService {
     public List<RiskAlertDto> getAlerts(UUID id, UUID principalId) {
         log.debug("Generating risk alerts portfolioId={}", id);
 
-        Portfolio portfolio = loadWithPositions(id, principalId);
+        Portfolio portfolio = loadPortfolioWithPositions(id, principalId);
 
         // Single price fetch pass — reused for both total value and sector weights.
         Map<String, Double> priceByTicker = portfolio.getPositions().stream()
@@ -501,7 +515,7 @@ public class PortfolioQueryService {
     public RiskMetricsDto getRiskMetrics(UUID portfolioId, String range, UUID userId) {
         log.debug("Building risk metrics portfolioId={} range={}", portfolioId, range);
 
-        Portfolio portfolio = loadWithPositions(portfolioId, userId);
+        Portfolio portfolio = loadPortfolioWithPositions(portfolioId, userId);
         List<PortfolioPosition> positions = portfolio.getPositions();
         if (positions.isEmpty()) return RiskMetricsDto.empty();
 
@@ -563,7 +577,7 @@ public class PortfolioQueryService {
         log.debug("Building VaR report portfolioId={} cl={} horizon={}",
                 portfolioId, confidenceLevel, timeHorizonDays);
 
-        Portfolio portfolio = loadWithPositions(portfolioId, userId);
+        Portfolio portfolio = loadPortfolioWithPositions(portfolioId, userId);
         List<PortfolioPosition> positions = portfolio.getPositions();
         if (positions.isEmpty()) return VaRReportDto.empty(confidenceLevel, timeHorizonDays);
 
@@ -727,7 +741,7 @@ public class PortfolioQueryService {
     public CorrelationMatrixDto getCorrelationMatrix(UUID portfolioId, String range, UUID userId) {
         log.debug("Building correlation matrix portfolioId={} range={}", portfolioId, range);
 
-        Portfolio portfolio = loadWithPositions(portfolioId, userId);
+        Portfolio portfolio = loadPortfolioWithPositions(portfolioId, userId);
         List<PortfolioPosition> positions = portfolio.getPositions();
         if (positions.size() < 2) {
             // Can't correlate a single asset
@@ -770,20 +784,7 @@ public class PortfolioQueryService {
         return new CorrelationMatrixDto(tickers, matrix);
     }
 
-
     // ── Private helpers ──────────────────────────────────────────────────────
-
-    private Portfolio loadWithPositions(UUID id, UUID principalId) {
-        Portfolio portfolio = portfolioRepository.findByIdWithPositions(id)
-                .orElseThrow(() -> {
-                    log.error("Portfolio not found id={}", id);
-                    return new PortfolioNotFoundException("Portfolio not found: " + id);
-                });
-        if (!portfolio.getUserId().equals(principalId)) {
-            throw new AccessDeniedException("Access denied to portfolio: " + id);
-        }
-        return portfolio;
-    }
 
     private List<Double> buildRollingMetric(
             List<Double> values, int points, Function<List<Double>, Double> metric) {

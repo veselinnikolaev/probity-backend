@@ -5,6 +5,7 @@ import me.veselin.probity.auth.exception.UnauthorizedException;
 import me.veselin.probity.marketdata.exception.MarketDataException;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
 import me.veselin.probity.portfolio.exception.PositionNotFoundException;
+import me.veselin.probity.simulation.exception.SimulationNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -85,7 +86,7 @@ public class GlobalExceptionHandler {
 
     // ── 404 ───────────────────────────────────────────────────────────────────
 
-    @ExceptionHandler({PortfolioNotFoundException.class, PositionNotFoundException.class})
+    @ExceptionHandler({PortfolioNotFoundException.class, PositionNotFoundException.class, SimulationNotFoundException.class})
     public ResponseEntity<?> handleNotFound(RuntimeException ex,
                                             HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(

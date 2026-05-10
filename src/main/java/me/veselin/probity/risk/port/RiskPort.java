@@ -2,6 +2,7 @@ package me.veselin.probity.risk.port;
 
 import me.veselin.probity.marketdata.domain.PriceBar;
 import me.veselin.probity.portfolio.domain.PortfolioPosition;
+import me.veselin.probity.risk.dto.DistributionStatistics;
 
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,7 @@ public interface RiskPort {
      * Returns one vol value per price point.
      */
     List<Double> rollingVolatility(List<Double> priceSeries, int windowDays);
+
     List<Double> rollingVolatilityFromReturns(List<Double> dailyReturns, int windowDays);
 
     /**
@@ -51,23 +53,54 @@ public interface RiskPort {
 
     /**
      * Max drawdown as a percentage of portfolio value.
-     * Input raw values, not returns
-     * Returns percentage of portfolio value, or 0 if no drawdown
+     * Input raw values, not returns.
+     * Returns percentage of portfolio value, or 0 if no drawdown.
      */
     double maxDrawdown(List<Double> portfolioValues);
 
     /**
-     * Highest high-interest-day (HHI) as a percentage of portfolio value.
+     * Herfindahl–Hirschman Index — sum of squared weights.
+     * Ranges 0 (perfectly diversified) to 1 (single position).
      */
     double computeHHI(List<PortfolioPosition> positions,
                       Map<String, List<PriceBar>> barsByTicker);
 
     /**
-     * Calculates the Pearson correlation between two datasets.
-     *
-     * @param x first dataset (X values)
-     * @param y second dataset (Y values, paired with X by index)
-     * @return correlation coefficient in range [-1, 1]
+     * Pearson correlation coefficient between two return series.
+     * Returns value in [-1, 1].
      */
     double pearsonCorrelation(List<Double> x, List<Double> y);
+
+    // ── Monte Carlo / Distribution math ──────────────────────────────────
+
+    /**
+     * Descriptive statistics over a pre-sorted array of final simulation values.
+     * Used by MonteCarloSimulationService to avoid duplicating mean/stdDev/median logic.
+     *
+     * @param sortedValues ascending-sorted array of simulated final portfolio values
+     * @return DistributionStatistics record (mean, median, stdDev, min, max)
+     */
+    DistributionStatistics distributionStatistics(double[] sortedValues);
+
+    /**
+     * Conditional Value at Risk (Expected Shortfall) at an arbitrary confidence level.
+     * Returns the average of simulated values that fall below the VaR threshold —
+     * i.e. the expected loss given that we are in the tail.
+     *
+     * @param sortedValues    ascending-sorted array of simulated final portfolio values
+     * @param confidenceLevel e.g. 0.95 for 95%
+     * @return CVaR as an absolute portfolio value (not a loss delta)
+     */
+    double conditionalValueAtRisk(double[] sortedValues, double confidenceLevel);
+
+    /**
+     * Value at Risk from a sorted simulation distribution at an arbitrary confidence level.
+     * Distinct from {@link #var95} which uses a parametric (normal) formula —
+     * this one reads directly from the empirical sorted distribution.
+     *
+     * @param sortedValues    ascending-sorted array of simulated final portfolio values
+     * @param confidenceLevel e.g. 0.95 for 95%
+     * @return the portfolio value at the VaR threshold
+     */
+    double simulationVaR(double[] sortedValues, double confidenceLevel);
 }

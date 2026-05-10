@@ -11,15 +11,11 @@ import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.codec.RedisCodec;
 import io.lettuce.core.codec.StringCodec;
 import me.veselin.probity.bff.security.rate_limit.RateLimit;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 
-@Component("redisBucketStore")
-@ConditionalOnBean(RedisClient.class)
-@ConditionalOnMissingBean(BucketStore.class)
+@Component
 public class RedisBucketStore implements BucketStore {
 
     private final ProxyManager<String> proxyManager;

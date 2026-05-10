@@ -25,9 +25,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 @Import(RateLimitTestConfig.class)
 public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
-    @Autowired AuthCommandPort authCommandPort;
-    @Autowired MockMvc mockMvc;
-    @Autowired ObjectMapper objectMapper;
+    @Autowired
+    AuthCommandPort authCommandPort;
+    @Autowired
+    MockMvc mockMvc;
+    @Autowired
+    protected ObjectMapper objectMapper;
 
     protected static final String ADMIN_USERNAME = "admin";
     protected static final String ADMIN_EMAIL = "admin@probity.test";
@@ -44,6 +47,28 @@ public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
 
         String username = objectMapper.readTree(result.getResponse().getContentAsString())
                 .get("username").asText();
+        String role = objectMapper.readTree(result.getResponse().getContentAsString())
+                .get("role").asText();
+        String accessToken = getCookieValue(result, Token.ACCESS.getCookieName());
+        String refreshToken = getCookieValue(result, Token.REFRESH.getCookieName());
+
+        return new AuthResult(username, role, accessToken, refreshToken);
+    }
+
+    protected AuthResult registerAndLogin(String username, String email, String password) throws Exception {
+        try {
+            authCommandPort.register(new RegisterCommand(username, email, password));
+        } catch (ConflictException ignored) {
+        }
+
+        MvcResult result = mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(String.format("""
+                                {"identifier": "%s", "password": "%s"}
+                                """, username, password)))
+                .andExpect(status().isOk())
+                .andReturn();
+
         String role = objectMapper.readTree(result.getResponse().getContentAsString())
                 .get("role").asText();
         String accessToken = getCookieValue(result, Token.ACCESS.getCookieName());
@@ -70,10 +95,10 @@ public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
 
     private String getCookieValue(MvcResult result, String name) {
         return Arrays.stream(result.getResponse().getCookies())
-                        .filter(c -> name.equals(c.getName()))
-                        .map(Cookie::getValue)
-                        .findFirst()
-                        .orElse(null);
+                .filter(c -> name.equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst()
+                .orElse(null);
     }
 
     @Override

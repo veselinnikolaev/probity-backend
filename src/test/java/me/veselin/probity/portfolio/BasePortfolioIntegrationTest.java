@@ -114,18 +114,18 @@ public abstract class BasePortfolioIntegrationTest extends BaseAuthIntegrationTe
                         new BigDecimal("132.00"), 1_000_000L)
         );
 
+        when(marketDataPort.getLatestPrice(anyString())).thenReturn(new BigDecimal("150.00"));
         when(marketDataPort.getLatestPrice(apple.getTicker())).thenReturn(new BigDecimal("150.00"));
         when(marketDataPort.getLatestPrice(google.getTicker())).thenReturn(new BigDecimal("132.00"));
-        when(marketDataPort.getLatestPrice(anyString())).thenReturn(new BigDecimal("150.00"));
 
+        when(marketDataPort.getHistoricalBars(anyString(), any(), any())).thenReturn(appleBars);
         when(marketDataPort.getHistoricalBars(eq(apple.getTicker()),  any(), any())).thenReturn(appleBars);
         when(marketDataPort.getHistoricalBars(eq(google.getTicker()), any(), any())).thenReturn(googleBars);
-        when(marketDataPort.getHistoricalBars(anyString(), any(), any())).thenReturn(appleBars);
     }
 
     // ── Risk-port stubs ──────────────────────────────────────────────────────
 
-    private void stubRiskPort() {
+    protected void stubRiskPort() {
         when(riskPort.annualisedVolatility(any())).thenReturn(0.18);
         when(riskPort.sharpeRatio(any())).thenReturn(1.2);
         when(riskPort.var95(anyDouble(), any())).thenReturn(220.0);

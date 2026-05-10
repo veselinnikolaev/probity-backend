@@ -1,0 +1,47 @@
+package me.veselin.probity.simulation.mapper;
+
+import me.veselin.probity.simulation.domain.Simulation;
+import me.veselin.probity.simulation.domain.SimulationPayload;
+import me.veselin.probity.bff.dto.simulation.SimulationResultDto;
+import org.springframework.stereotype.Component;
+
+@Component
+public class SimulationMapper {
+
+    public SimulationResultDto toDto(Simulation simulation) {
+        SimulationPayload p = simulation.getResultPayload();
+
+        // BaseEntitySoftDelete.createdAt is LocalDateTime — format as ISO string
+        String createdAt = simulation.getCreatedAt() != null
+                ? simulation.getCreatedAt().toString()
+                : null;
+
+        return new SimulationResultDto(
+                simulation.getId().toString(),
+                simulation.getPortfolioId().toString(),
+                createdAt,
+                new SimulationResultDto.Parameters(
+                        simulation.getNumberOfSimulations(),
+                        simulation.getTimeHorizonDays(),
+                        simulation.getConfidenceLevel()
+                ),
+                simulation.getCurrentPortfolioValue(),
+                p.allPaths(),
+                p.percentileSeries(),
+                new SimulationResultDto.Statistics(
+                        p.statistics().expectedFinalValue(),
+                        p.statistics().medianFinalValue(),
+                        p.statistics().stdDeviation(),
+                        p.statistics().minValue(),
+                        p.statistics().maxValue()
+                ),
+                new SimulationResultDto.Outcomes(
+                        p.outcomes().probabilityOf10PercentLoss(),
+                        p.outcomes().probabilityOf20PercentLoss(),
+                        p.outcomes().valueAtRisk95(),
+                        p.outcomes().conditionalValueAtRisk95()
+                ),
+                p.distribution()
+        );
+    }
+}
