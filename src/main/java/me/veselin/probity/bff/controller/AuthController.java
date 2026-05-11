@@ -19,6 +19,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -27,14 +28,16 @@ public class AuthController {
 
     private final AuthCommandPort authCommandPort;
     private final CookieService cookieService;
+    private final CsrfTokenRepository csrfTokenRepository;
 
     @GetMapping(ApiRoutes.Auth.CSRF)
     public ResponseEntity<Void> csrf(HttpServletRequest request, HttpServletResponse response) {
-        CsrfToken csrfToken = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
-        if (csrfToken != null) {
-            csrfToken.getToken(); // force cookie write
-            response.setHeader("X-XSRF-TOKEN", csrfToken.getToken());
+        CsrfToken token = csrfTokenRepository.loadToken(request);
+        if (token == null) {
+            token = csrfTokenRepository.generateToken(request);
+            csrfTokenRepository.saveToken(token, request, response); // writes the cookie
         }
+        response.setHeader("X-XSRF-TOKEN", token.getToken());
         return ResponseEntity.ok().build();
     }
 

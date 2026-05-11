@@ -38,18 +38,10 @@ public class SecurityConfiguration {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
-        csrfRepo.setCookieCustomizer(cookie -> cookie.domain(domain)
-                .path("/")
-                .sameSite("None")
-                .secure(true)
-                .httpOnly(false)
-                .maxAge(3600L));
-
         http.cors(Customizer.withDefaults())
                 .headers(headers -> headers.contentTypeOptions(Customizer.withDefaults()))
                 .csrf(csrf -> csrf
-                        .csrfTokenRepository(csrfRepo)
+                        .csrfTokenRepository(csrfTokenRepository())
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                         .ignoringRequestMatchers(
                                 ApiRoutes.Auth.LOGIN,
@@ -77,6 +69,19 @@ public class SecurityConfiguration {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint));
 
         return http.build();
+    }
+
+    @Bean
+    public CookieCsrfTokenRepository csrfTokenRepository() {
+        CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfRepo.setCookieCustomizer(cookie -> cookie
+                .domain(domain)
+                .path("/")
+                .sameSite("None")
+                .secure(true)
+                .httpOnly(false)
+                .maxAge(3600L));
+        return csrfRepo;
     }
 
     @Bean
