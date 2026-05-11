@@ -109,13 +109,15 @@ public class PortfolioController {
 
     @PostMapping(ApiRoutes.Portfolios.PORTFOLIOS)
     public ResponseEntity<PortfolioCreatedDto> create(@RequestBody PortfolioCreateRequest portfolioCreateDto,
-                                                      @AuthenticationPrincipal UserPrincipal userPrincipal){
+                                                      @AuthenticationPrincipal UserPrincipal userPrincipal,
+                                                      UriComponentsBuilder ucb){
 
         PortfolioCreatedDto created = portfolioCommandService.create(portfolioCreateDto.name(), userPrincipal.id());
-        URI location = UriComponentsBuilder
-                .fromPath(ApiRoutes.Portfolios.PORTFOLIO)
+
+        URI location = ucb.path(ApiRoutes.Portfolios.PORTFOLIO)
                 .buildAndExpand(created.id())
                 .toUri();
+
         return ResponseEntity.created(location).body(created);
     }
 
@@ -123,13 +125,15 @@ public class PortfolioController {
     public ResponseEntity<PositionCreatedDto> addPosition(
             @PathVariable UUID id,
             @RequestBody PositionCreateRequest request,
-            @AuthenticationPrincipal UserPrincipal principal) {
+            @AuthenticationPrincipal UserPrincipal principal,
+            UriComponentsBuilder ucb) {
 
         PositionCreatedDto created = portfolioCommandService.addPosition(id, request, principal.id());
-        URI location = UriComponentsBuilder
-                .fromPath(ApiRoutes.Portfolios.POSITION)
+
+        URI location = ucb.path(ApiRoutes.Portfolios.POSITION)
                 .buildAndExpand(id, created.id())
                 .toUri();
+
         return ResponseEntity.created(location).body(created);
     }
 

@@ -51,13 +51,18 @@ public class PortfolioCommandService {
         if (!portfolio.getUserId().equals(userId))
             throw new AccessDeniedException("Access denied to portfolio: " + portfolioId);
 
-        // Resolves from DB or auto-creates from Yahoo Finance
         Asset asset = assetResolver.resolve(request.ticker());
-
         BigDecimal currentPrice = marketDataPort.getLatestPrice(asset.getTicker());
 
-        PortfolioPosition position = portfolio.addPosition(asset, request.quantity(), currentPrice);
+        portfolio.addPosition(asset, request.quantity(), currentPrice);
         portfolioRepository.saveAndFlush(portfolio);
+
+        // Re-fetch the position after flush so the ID is guaranteed to be populated
+        PortfolioPosition position = portfolio.getPositions().stream()
+                .filter(p -> p.getAsset().getId().equals(asset.getId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Position not found after save for asset: " + asset.getTicker()));
 
         return new PositionCreatedDto(
                 position.getId().toString(),

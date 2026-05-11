@@ -67,6 +67,12 @@ public class MonteCarloSimulationService {
 
         // ── Derive μ and σ from real market data (or use caller overrides) ──
         BigDecimal currentValue = computeCurrentValue(positions);
+        log.info("computeCurrentValue result={} for {} positions",
+                currentValue, positions.size());
+        if (currentValue.compareTo(BigDecimal.ZERO) == 0) {
+            throw new IllegalStateException(
+                    "Portfolio value is zero — price fetch failed for all positions. Check ERROR logs above.");
+        }
         double currentValueDouble = currentValue.doubleValue();
         double[] params = deriveParameters(positions, request);
         double dailyReturn = params[0];
@@ -199,14 +205,22 @@ public class MonteCarloSimulationService {
                 ));
 
         List<Double> portfolioReturns = buildPortfolioReturns(positions, barsByTicker);
+        log.info("portfolioReturns size={} sample={}",
+                portfolioReturns.size(),
+                portfolioReturns.stream().limit(5).toList());
 
         double annualVol = portfolioReturns.size() >= 2
-                ? riskPort.annualisedVolatility(portfolioReturns)
-                : 0.15; // fallback: 15%
+                ? riskPort.annualisedVolatility(portfolioReturns) / 100.0  // convert % → decimal
+                : 0.15;
 
         double annualReturn = hasReturnOverride
                 ? request.assumedReturnPercent() / 100.0
                 : portfolioReturns.stream().mapToDouble(Double::doubleValue).average().orElse(0.0) * 252.0;
+
+        log.info("annualVol={} annualReturn={} dailyReturn={} dailyVol={}",
+                annualVol, annualReturn,
+                annualReturn / 252.0,
+                annualVol / Math.sqrt(252.0));
 
         double useVol = hasVolOverride
                 ? request.assumedVolatilityPercent() / 100.0
@@ -217,12 +231,21 @@ public class MonteCarloSimulationService {
 
     private List<Double> buildPortfolioReturns(List<PortfolioPosition> positions,
                                                Map<String, List<PriceBar>> barsByTicker) {
-        // Reuse DataUtil + RiskPort patterns consistent with PortfolioQueryService
+        log.info("buildPortfolioReturns: barsByTicker keys={}, sizes={}",
+                barsByTicker.keySet(),
+                barsByTicker.entrySet().stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().size())));
+
         Map<LocalDate, Double> valueByDate = DataUtil.buildValueSeries(positions, barsByTicker);
+        log.info("buildPortfolioReturns: valueByDate size={}", valueByDate.size());
+
         valueByDate.entrySet().removeIf(e -> e.getValue() == 0.0);
 
         List<Double> values = new ArrayList<>(valueByDate.values());
-        if (values.size() < 2) return List.of();
+        if (values.size() < 2) {
+            log.warn("buildPortfolioReturns: insufficient values size={} — falling back", values.size());
+            return List.of();
+        }
 
         List<Double> returns = new ArrayList<>(values.size() - 1);
         for (int i = 1; i < values.size(); i++) {
@@ -331,7 +354,10 @@ public class MonteCarloSimulationService {
                 .map(pos -> {
                     try {
                         BigDecimal price = marketDataPort.getLatestPrice(pos.getAsset().getTicker());
-                        return price.multiply(pos.getQuantity());
+                        BigDecimal posValue = price.multiply(pos.getQuantity());
+                        log.info("position ticker={} qty={} price={} value={}",
+                                pos.getAsset().getTicker(), pos.getQuantity(), price, posValue);
+                        return posValue;
                     } catch (Exception e) {
                         log.warn("Failed to fetch price for ticker={}", pos.getAsset().getTicker(), e);
                         return BigDecimal.ZERO;
