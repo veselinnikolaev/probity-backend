@@ -32,7 +32,8 @@ public class AuthController {
     public ResponseEntity<Void> csrf(HttpServletRequest request, HttpServletResponse response) {
         CsrfToken csrfToken = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
         if (csrfToken != null) {
-            csrfToken.getToken(); // force the token to be written to the response cookie
+            csrfToken.getToken(); // force cookie write
+            response.setHeader("X-XSRF-TOKEN", csrfToken.getToken());
         }
         return ResponseEntity.ok().build();
     }
