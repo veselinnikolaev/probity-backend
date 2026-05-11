@@ -30,9 +30,6 @@ public class SecurityConfiguration {
     @Value("${probity.cors.allowed-origins}")
     private String allowedOrigins;
 
-    @Value("${probity.domain}")
-    private String domain;
-
     private final JwtAuthenticationFilter jwtFilter;
     private final AuthenticationEntryPoint authenticationEntryPoint;
 
@@ -75,7 +72,6 @@ public class SecurityConfiguration {
     public CookieCsrfTokenRepository csrfTokenRepository() {
         CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepo.setCookieCustomizer(cookie -> cookie
-                .domain(domain)
                 .path("/")
                 .sameSite("None")
                 .secure(true)
