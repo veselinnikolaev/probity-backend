@@ -30,21 +30,30 @@ public class SecurityConfiguration {
     @Value("${probity.cors.allowed-origins}")
     private String allowedOrigins;
 
+    @Value("${probity.domain}")
+    private String domain;
+
     private final JwtAuthenticationFilter jwtFilter;
     private final AuthenticationEntryPoint authenticationEntryPoint;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-                .cors(Customizer.withDefaults())
+        CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfRepo.setCookieCustomizer(cookie -> cookie.domain(domain)
+                .path("/")
+                .sameSite("None")
+                .secure(true)
+                .httpOnly(false)
+                .maxAge(3600L));
+
+        http.cors(Customizer.withDefaults())
                 .headers(headers -> headers.contentTypeOptions(Customizer.withDefaults()))
                 .csrf(csrf -> csrf
-                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRepository(csrfRepo)
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                         .ignoringRequestMatchers(
                                 ApiRoutes.Auth.LOGIN,
-                                ApiRoutes.Auth.REGISTER,
-                                ApiRoutes.Auth.CSRF
+                                ApiRoutes.Auth.REGISTER
                         )
                 )
                 .httpBasic(AbstractHttpConfigurer::disable)
