@@ -120,15 +120,15 @@ public class PortfolioController {
 
     @PostMapping(ApiRoutes.Portfolios.POSITIONS)
     public ResponseEntity<PositionCreatedDto> addPosition(
-            @PathVariable UUID portfolioId,
+            @PathVariable UUID id,
             @RequestBody PositionCreateRequest request,
             @AuthenticationPrincipal UserPrincipal principal,
             UriComponentsBuilder ucb) {
 
-        PositionCreatedDto created = portfolioCommandService.addPosition(portfolioId, request, principal.id());
+        PositionCreatedDto created = portfolioCommandService.addPosition(id, request, principal.id());
 
         URI location = ucb.path(ApiRoutes.Portfolios.POSITION)
-                .buildAndExpand(portfolioId, created.id())
+                .buildAndExpand(id, created.id())
                 .toUri();
 
         return ResponseEntity.created(location).body(created);
@@ -136,22 +136,22 @@ public class PortfolioController {
 
     @PutMapping(ApiRoutes.Portfolios.POSITION)
     public ResponseEntity<Void> updatePosition(
-            @PathVariable UUID portfolioId,
+            @PathVariable UUID id,
             @PathVariable UUID positionId,
             @RequestBody PositionUpdateRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        portfolioCommandService.updatePosition(portfolioId, positionId, request, principal.id());
+        portfolioCommandService.updatePosition(id, positionId, request, principal.id());
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping(ApiRoutes.Portfolios.POSITION)
     public ResponseEntity<Void> deletePosition(
-            @PathVariable UUID portfolioId,
+            @PathVariable UUID id,
             @PathVariable UUID positionId,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        portfolioCommandService.deletePosition(portfolioId, positionId, principal.id());
+        portfolioCommandService.deletePosition(id, positionId, principal.id());
         return ResponseEntity.noContent().build();
     }
 }
