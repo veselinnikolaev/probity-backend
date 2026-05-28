@@ -7,6 +7,9 @@ import me.veselin.probity.risk.dto.DistributionStatistics;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Outbound risk-calculation port exposing reusable quantitative metrics.
+ */
 public interface RiskPort {
 
     /**

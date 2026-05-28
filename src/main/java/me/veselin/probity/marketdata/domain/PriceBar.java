@@ -14,6 +14,10 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Objects;
 
+/**
+ * Market data aggregate in the marketdata context for one daily OHLCV bar.
+ * Acts as the canonical price primitive for return and volatility calculations.
+ */
 @Entity
 @Table(name = "price_bars",
         uniqueConstraints = @UniqueConstraint(columnNames = {"ticker", "bar_date"}))

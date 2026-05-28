@@ -3,6 +3,9 @@ package me.veselin.probity.portfolio.dto;
 import me.veselin.probity.common.util.SeriesUtil;
 import me.veselin.probity.portfolio.domain.PortfolioPosition;
 
+/**
+ * Query-layer DTO describing one portfolio position with valuation and risk attributes.
+ */
 public record PositionDto(
         String id,
         String ticker,

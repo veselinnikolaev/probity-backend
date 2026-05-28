@@ -46,7 +46,7 @@ public class SimulationController {
      * Fetches a previously run simulation result by its ID.
      */
     @GetMapping(ApiRoutes.Simulations.SIMULATION)
-    public ResponseEntity<SimulationResultDto> get(
+    public ResponseEntity<SimulationResultDto> getSimulation(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
 
@@ -58,7 +58,7 @@ public class SimulationController {
      * Lists all simulations for a portfolio, most recent first.
      */
     @GetMapping(ApiRoutes.Simulations.SIMULATIONS)
-    public ResponseEntity<List<SimulationResultDto>> list(
+    public ResponseEntity<List<SimulationResultDto>> listSimulations(
             @RequestParam UUID portfolioId,
             @AuthenticationPrincipal UserPrincipal principal) {
 

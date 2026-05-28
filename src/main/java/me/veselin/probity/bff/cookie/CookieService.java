@@ -9,6 +9,9 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 
 @Service
+/**
+ * Encapsulates HTTP cookie policies for auth token transport in the BFF layer.
+ */
 public class CookieService {
     @Value("${probity.jwt.access.expiration.seconds}")
     private long accessExpirationTime;
@@ -18,6 +21,9 @@ public class CookieService {
     @Value("${probity.cookie.samesite}")
     private String sameSite;
 
+    /**
+     * Builds the secure access-token cookie returned after successful authentication.
+     */
     public ResponseCookie buildAccessCookie(String token) {
         return ResponseCookie.from(Token.ACCESS.getCookieName(), token)
                 .httpOnly(true)
@@ -28,6 +34,9 @@ public class CookieService {
                 .build();
     }
 
+    /**
+     * Builds the refresh-token cookie scoped to the refresh endpoint.
+     */
     public ResponseCookie buildRefreshCookie(String token) {
         return ResponseCookie.from(Token.REFRESH.getCookieName(), token)
                 .httpOnly(true)
@@ -38,11 +47,17 @@ public class CookieService {
                 .build();
     }
 
+    /**
+     * Expires the access-token cookie client-side during logout.
+     */
     public ResponseCookie clearAccessCookie() {
         return ResponseCookie.from(Token.ACCESS.getCookieName(), "")
                 .httpOnly(true).secure(true).path("/").maxAge(0).build();
     }
 
+    /**
+     * Expires the refresh-token cookie client-side during logout.
+     */
     public ResponseCookie clearRefreshCookie() {
         return ResponseCookie.from(Token.REFRESH.getCookieName(), "")
                 .httpOnly(true).secure(true).path(ApiRoutes.Auth.REFRESH).maxAge(0).build();

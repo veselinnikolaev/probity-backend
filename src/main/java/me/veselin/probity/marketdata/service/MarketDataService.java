@@ -18,19 +18,27 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+/**
+ * Application service that serves market prices from local storage and
+ * backfills missing ranges from the external data adapter on demand.
+ */
 public class MarketDataService implements MarketDataPort {
 
     @Value("${probity.marketdata.latest-price-lookback-days:14}")
     private int latestPriceLookbackDays;
 
     private final PriceBarRepository priceBarRepository;
-    private final MarketDataSyncService syncService;
+    private final MarketDataSyncService marketDataSyncService;
 
     // One monitor per ticker keeps concurrent requests for the same symbol serialized
     // without blocking unrelated tickers against each other.
     private final ConcurrentHashMap<String, Object> tickerLocks = new ConcurrentHashMap<>();
 
     @Override
+    /**
+     * Returns the most recent known adjusted close for a ticker.
+     * Uses an on-demand sync window so reads stay resilient when bars are stale.
+     */
     public BigDecimal getLatestPrice(String ticker) {
         String upper = ticker.toUpperCase();
         log.trace("Fetching latest price for ticker={}", upper);
@@ -57,6 +65,10 @@ public class MarketDataService implements MarketDataPort {
     }
 
     @Override
+    /**
+     * Returns historical daily bars for a ticker and date range.
+     * Missing segments are fetched before read to keep callers stateless.
+     */
     public List<PriceBar> getHistoricalBars(String ticker, LocalDate from, LocalDate to) {
         String upper = ticker.toUpperCase();
         log.trace("Fetching historical bars ticker={} range={} - {}", upper, from, to);
@@ -117,7 +129,7 @@ public class MarketDataService implements MarketDataPort {
 
                 if (minOpt.isEmpty()) {
                     log.info("No data → full fetch ticker={} {} - {}", ticker, safeFrom, safeTo);
-                    syncService.fetchAndPersist(ticker, safeFrom, safeTo);
+                    marketDataSyncService.fetchAndPersist(ticker, safeFrom, safeTo);
                     return;
                 }
 
@@ -128,7 +140,7 @@ public class MarketDataService implements MarketDataPort {
                     LocalDate leftTo = TradingUtil.prevTradingDay(min);
                     log.info("Left gap ticker={} leftFrom={} leftTo={}", ticker, safeFrom, leftTo);
                     if (!leftTo.isBefore(safeFrom)) {
-                        syncService.fetchAndPersist(ticker, safeFrom, leftTo);
+                        marketDataSyncService.fetchAndPersist(ticker, safeFrom, leftTo);
                     }
                 }
 
@@ -136,7 +148,7 @@ public class MarketDataService implements MarketDataPort {
                     LocalDate rightFrom = TradingUtil.nextTradingDay(max);
                     log.info("Right gap ticker={} rightFrom={} rightTo={}", ticker, rightFrom, safeTo);
                     if (!rightFrom.isAfter(safeTo)) {
-                        syncService.fetchAndPersist(ticker, rightFrom, safeTo);
+                        marketDataSyncService.fetchAndPersist(ticker, rightFrom, safeTo);
                     }
                 }
             } catch (Exception e) {

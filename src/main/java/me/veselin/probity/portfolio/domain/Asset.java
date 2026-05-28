@@ -16,6 +16,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Reference-data aggregate in the portfolio context that represents a tradable instrument.
+ * Maintains normalized ticker identity and static classification metadata.
+ */
 @Entity
 @Table(
         name = "assets",

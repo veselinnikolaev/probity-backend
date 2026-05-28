@@ -14,6 +14,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * Aggregate root for the portfolio bounded context.
+ * Enforces ownership and positive-position invariants for portfolio holdings.
+ */
 @Entity
 @Table(
         name = "portfolios",

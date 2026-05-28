@@ -6,8 +6,14 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Outbound port for market data access used by portfolio and simulation contexts.
+ */
 public interface MarketDataPort {
 
+    /**
+     * Returns the latest adjusted close for a symbol.
+     */
     BigDecimal getLatestPrice(String ticker);
 
     /**

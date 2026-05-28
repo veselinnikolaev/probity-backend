@@ -32,6 +32,9 @@ import java.util.stream.IntStream;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+/**
+ * Runs and retrieves Monte Carlo simulations for portfolio scenarios.
+ */
 public class MonteCarloSimulationService {
 
     // 90 trading days (~4 months) of history used to derive μ and σ when
@@ -53,6 +56,9 @@ public class MonteCarloSimulationService {
     // ── Public API ────────────────────────────────────────────────────────
 
     @Transactional
+    /**
+     * Executes a new simulation run for a user-owned portfolio and persists its payload.
+     */
     public SimulationResultDto run(RunSimulationRequest request, UUID userId) {
         log.info("Running Monte Carlo simulation portfolioId={} userId={} paths={} horizon={}d",
                 request.portfolioId(), userId, request.numberOfSimulations(), request.timeHorizonDays());
@@ -129,6 +135,9 @@ public class MonteCarloSimulationService {
     }
 
     @Transactional(readOnly = true)
+    /**
+     * Loads a single simulation result owned by the requesting user.
+     */
     public SimulationResultDto get(UUID simulationId, UUID userId) {
         Simulation simulation = simulationRepository.findByIdAndUserId(simulationId, userId)
                 .orElseThrow(() -> new SimulationNotFoundException(
@@ -137,6 +146,9 @@ public class MonteCarloSimulationService {
     }
 
     @Transactional(readOnly = true)
+    /**
+     * Lists simulations previously run for a portfolio by the requesting user.
+     */
     public List<SimulationResultDto> listForPortfolio(UUID portfolioId, UUID userId) {
         // Ownership of the portfolio is implicitly enforced: we only return
         // rows where user_id matches — no separate portfolio auth needed.

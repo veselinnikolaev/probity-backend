@@ -4,6 +4,9 @@ import jakarta.validation.constraints.*;
 
 import java.util.UUID;
 
+/**
+ * BFF request DTO for starting a Monte Carlo simulation run.
+ */
 public record RunSimulationRequest(
         @NotNull(message = "portfolioId is required")
         UUID portfolioId,

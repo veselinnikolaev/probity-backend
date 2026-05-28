@@ -13,6 +13,10 @@ import org.hibernate.type.SqlTypes;
 import java.io.Serializable;
 import java.util.Objects;
 
+/**
+ * Aggregate root for the auth context representing an application identity.
+ * Preserves credential ownership and role assignment invariants.
+ */
 @Entity
 @Table(
         name = "users",

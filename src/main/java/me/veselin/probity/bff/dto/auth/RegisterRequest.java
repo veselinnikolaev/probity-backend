@@ -5,6 +5,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+/**
+ * BFF request DTO for self-service account registration.
+ */
 public record RegisterRequest(
         @NotBlank(message = "Username is required")
         @Size(min = 3, max = 20)

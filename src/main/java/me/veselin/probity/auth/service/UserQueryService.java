@@ -9,10 +9,16 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * Read-side access service for user lookups used by authentication filters.
+ */
 public class UserQueryService implements AuthQueryPort {
     private final UserRepository userRepository;
 
     @Cacheable(cacheNames = "user", key = "#username")
+    /**
+     * Loads a user by username for security principal reconstruction.
+     */
     public User getByUsername(String username) {
         return userRepository.findByUsername(username).orElseThrow(
                 () -> new RuntimeException("User not found")

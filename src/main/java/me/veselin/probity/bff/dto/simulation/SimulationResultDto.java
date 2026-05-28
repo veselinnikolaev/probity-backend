@@ -5,6 +5,9 @@ import me.veselin.probity.simulation.domain.SimulationPayload;
 import java.math.BigDecimal;
 import java.util.List;
 
+/**
+ * BFF response DTO exposing persisted simulation results to the client.
+ */
 public record SimulationResultDto(
         String id,
         String portfolioId,

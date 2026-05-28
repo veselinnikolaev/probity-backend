@@ -3,6 +3,9 @@ package me.veselin.probity.bff.dto.auth;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 
+/**
+ * BFF request DTO for credential-based login submission.
+ */
 public record LoginRequest(
         @NotBlank(message = "Identifier is required")
         String identifier,

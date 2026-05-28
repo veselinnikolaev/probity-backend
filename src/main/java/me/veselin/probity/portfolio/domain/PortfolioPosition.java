@@ -11,6 +11,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Objects;
 
+/**
+ * Child entity of the `Portfolio` aggregate representing one held instrument.
+ * Guarantees strictly positive quantity and weighted-average cost consistency.
+ */
 @Entity
 @Table(
         name = "portfolio_positions",

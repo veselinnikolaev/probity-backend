@@ -2,6 +2,9 @@ package me.veselin.probity.portfolio.dto;
 
 import java.util.List;
 
+/**
+ * Query-layer DTO for Value-at-Risk reporting and explanatory breakdowns.
+ */
 public record VaRReportDto(
         double valueAtRisk,
         double confidenceLevel,

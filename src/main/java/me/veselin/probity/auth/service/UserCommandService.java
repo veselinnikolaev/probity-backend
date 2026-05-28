@@ -19,11 +19,19 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * Implements authentication state transitions for login, registration,
+ * token refresh rotation, and logout invalidation.
+ */
 public class UserCommandService implements AuthCommandPort {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    /**
+     * Authenticates a user and issues a fresh access/refresh token pair.
+     * Uses a constant-time password path to reduce username-enumeration signals.
+     */
     public AuthResult login(LoginCommand request) {
         User user = userRepository.findByUsernameOrEmail(request.identifier(), request.identifier())
                 .orElse(null);
@@ -50,6 +58,9 @@ public class UserCommandService implements AuthCommandPort {
         return new AuthResult(username, role, accessToken, refreshToken);
     }
 
+    /**
+     * Creates a new user account after enforcing unique username and email constraints.
+     */
     public void register(RegisterCommand request) {
         if (userRepository.existsByUsername(request.username())) {
             throw new ConflictException("Username already taken");
@@ -63,6 +74,9 @@ public class UserCommandService implements AuthCommandPort {
         userRepository.save(user);
     }
 
+    /**
+     * Invalidates provided tokens so the current session cannot be reused.
+     */
     public void logout(String accessToken, String refreshToken) {
         if (accessToken == null && refreshToken == null) {
             throw new UnauthorizedException("No tokens provided");
@@ -82,6 +96,9 @@ public class UserCommandService implements AuthCommandPort {
         }
     }
 
+    /**
+     * Rotates a refresh token and returns a new token pair for the same principal.
+     */
     public AuthResult refresh(String incomingRefreshToken) {
         Claims claims = jwtService.extractClaims(incomingRefreshToken);
         String username = claims.getSubject();

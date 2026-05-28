@@ -7,7 +7,6 @@ import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.portfolio.dto.*;
 import me.veselin.probity.portfolio.service.portfolio.PortfolioCommandService;
 import me.veselin.probity.portfolio.service.portfolio.PortfolioQueryService;
-import me.veselin.probity.portfolio.dto.VaRReportDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -42,8 +41,6 @@ public class PortfolioController {
             @PathVariable UUID id,
             @RequestParam(defaultValue = "90d") String range,
             @AuthenticationPrincipal UserPrincipal principal) {
-
-        System.out.println(range);
         return ResponseEntity.ok(portfolioQueryService.getSummary(id, range, principal.id()));
     }
 
@@ -108,11 +105,11 @@ public class PortfolioController {
     }
 
     @PostMapping(ApiRoutes.Portfolios.PORTFOLIOS)
-    public ResponseEntity<PortfolioCreatedDto> create(@RequestBody PortfolioCreateRequest portfolioCreateDto,
+    public ResponseEntity<PortfolioCreatedDto> create(@RequestBody PortfolioCreateRequest request,
                                                       @AuthenticationPrincipal UserPrincipal userPrincipal,
                                                       UriComponentsBuilder ucb){
 
-        PortfolioCreatedDto created = portfolioCommandService.create(portfolioCreateDto.name(), userPrincipal.id());
+        PortfolioCreatedDto created = portfolioCommandService.create(request.name(), userPrincipal.id());
 
         URI location = ucb.path(ApiRoutes.Portfolios.PORTFOLIO)
                 .buildAndExpand(created.id())
@@ -123,15 +120,15 @@ public class PortfolioController {
 
     @PostMapping(ApiRoutes.Portfolios.POSITIONS)
     public ResponseEntity<PositionCreatedDto> addPosition(
-            @PathVariable UUID id,
+            @PathVariable UUID portfolioId,
             @RequestBody PositionCreateRequest request,
             @AuthenticationPrincipal UserPrincipal principal,
             UriComponentsBuilder ucb) {
 
-        PositionCreatedDto created = portfolioCommandService.addPosition(id, request, principal.id());
+        PositionCreatedDto created = portfolioCommandService.addPosition(portfolioId, request, principal.id());
 
         URI location = ucb.path(ApiRoutes.Portfolios.POSITION)
-                .buildAndExpand(id, created.id())
+                .buildAndExpand(portfolioId, created.id())
                 .toUri();
 
         return ResponseEntity.created(location).body(created);
@@ -139,22 +136,22 @@ public class PortfolioController {
 
     @PutMapping(ApiRoutes.Portfolios.POSITION)
     public ResponseEntity<Void> updatePosition(
-            @PathVariable UUID id,
+            @PathVariable UUID portfolioId,
             @PathVariable UUID positionId,
             @RequestBody PositionUpdateRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        portfolioCommandService.updatePosition(id, positionId, request, principal.id());
+        portfolioCommandService.updatePosition(portfolioId, positionId, request, principal.id());
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping(ApiRoutes.Portfolios.POSITION)
     public ResponseEntity<Void> deletePosition(
-            @PathVariable UUID id,
+            @PathVariable UUID portfolioId,
             @PathVariable UUID positionId,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        portfolioCommandService.deletePosition(id, positionId, principal.id());
+        portfolioCommandService.deletePosition(portfolioId, positionId, principal.id());
         return ResponseEntity.noContent().build();
     }
 }

@@ -26,12 +26,18 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 @Slf4j
+/**
+ * Command-side application service for portfolio mutations.
+ */
 public class PortfolioCommandService {
 
     private final PortfolioRepository portfolioRepository;
     private final AssetResolver assetResolver;
     private final MarketDataPort marketDataPort;
 
+    /**
+     * Creates a portfolio for a user while enforcing unique portfolio names per owner.
+     */
     public PortfolioCreatedDto create(String name, UUID userId) {
         if (portfolioRepository.existsByNameAndUserId(name, userId)) {
             throw new ConflictException("Portfolio '" + name + "' already exists");
@@ -40,6 +46,9 @@ public class PortfolioCommandService {
         return new PortfolioCreatedDto(saved.getId().toString(), saved.getName());
     }
 
+    /**
+     * Adds a position to a portfolio and returns the created position identifier.
+     */
     public PositionCreatedDto addPosition(UUID portfolioId,
                                           PositionCreateRequest request,
                                           UUID userId) {
@@ -71,6 +80,9 @@ public class PortfolioCommandService {
         );
     }
 
+    /**
+     * Updates the quantity of an existing position using the latest market price.
+     */
     public void updatePosition(UUID portfolioId, UUID positionId,
                                PositionUpdateRequest request, UUID userId) {
         Portfolio portfolio = portfolioRepository.findByIdWithPositions(portfolioId)
@@ -91,6 +103,9 @@ public class PortfolioCommandService {
         portfolioRepository.save(portfolio);
     }
 
+    /**
+     * Removes a position from the portfolio owned by the requesting user.
+     */
     public void deletePosition(UUID portfolioId, UUID positionId, UUID userId) {
         Portfolio portfolio = portfolioRepository.findByIdWithPositions(portfolioId)
                 .orElseThrow(() -> new PortfolioNotFoundException("Portfolio not found: " + portfolioId));

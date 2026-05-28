@@ -2,6 +2,9 @@ package me.veselin.probity.portfolio.dto;
 
 import java.util.List;
 
+/**
+ * Query-layer DTO for aggregated portfolio risk factors and trend sparklines.
+ */
 public record RiskMetricsDto(
         double beta,
         double betaDelta,

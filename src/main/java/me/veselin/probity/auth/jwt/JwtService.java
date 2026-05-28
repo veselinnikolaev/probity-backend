@@ -21,6 +21,9 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * Issues and validates JWT tokens and manages refresh/blacklist state in Redis.
+ */
 public class JwtService {
     private final RedisTemplate<String, String> redisTemplate;
 
@@ -42,6 +45,9 @@ public class JwtService {
     private String blacklistedPrefix;
 
     @PostConstruct
+    /**
+     * Initializes the signing key from configuration and enforces minimum secret strength.
+     */
     public void setKey() {
         if (secret.length() < 32) {
             throw new IllegalArgumentException("JWT secret must be at least 32 characters");
@@ -49,18 +55,27 @@ public class JwtService {
         this.key = Keys.hmacShaKeyFor(secret.getBytes());
     }
 
+    /**
+     * Creates a short-lived access token with caller-supplied claims.
+     */
     public String generateAccessJwt(String subject, Map<String, Object> claims) {
         long expiry = System.currentTimeMillis() + accessExpirationTime * 1000;
 
         return constructJwt(subject, claims, expiry);
     }
 
+    /**
+     * Creates a long-lived refresh token with caller-supplied claims.
+     */
     public String generateRefreshJwt(String subject, Map<String, Object> claims) {
         long expiry = System.currentTimeMillis() + refreshExpirationTime * 1000;
 
         return constructJwt(subject, claims, expiry);
     }
 
+    /**
+     * Parses and validates JWT claims, converting parsing failures to unauthorized errors.
+     */
     public Claims extractClaims(String token) throws UnauthorizedException {
         try {
             return Jwts.parser()

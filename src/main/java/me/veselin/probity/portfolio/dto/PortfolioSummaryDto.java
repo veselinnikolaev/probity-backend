@@ -2,6 +2,9 @@ package me.veselin.probity.portfolio.dto;
 
 import java.util.List;
 
+/**
+ * Query-layer DTO for high-level portfolio performance and risk summary metrics.
+ */
 public record PortfolioSummaryDto(
         double totalValue,
         double totalValueDelta,

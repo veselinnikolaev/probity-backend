@@ -21,6 +21,9 @@ import java.util.Map;
 @Transactional(readOnly = true)
 @Slf4j
 @RequiredArgsConstructor
+/**
+ * Query-side asset lookup service combining local search with external metadata fallback.
+ */
 public class AssetQueryService {
 
     private static final int MAX_DB_RESULTS    = 8;

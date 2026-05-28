@@ -2,6 +2,9 @@ package me.veselin.probity.bff.dto.auth;
 
 import java.util.UUID;
 
+/**
+ * Authenticated principal DTO attached to secured controller methods.
+ */
 public record UserPrincipal(
         UUID id,
         String username,

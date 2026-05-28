@@ -31,6 +31,9 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 @Slf4j
 @RequiredArgsConstructor
+/**
+ * Query-side portfolio read model assembler used by BFF endpoints.
+ */
 public class PortfolioQueryService implements PortfolioPort {
 
     private static final int MIN_RETURNS_FOR_METRICS = 5;
@@ -39,6 +42,9 @@ public class PortfolioQueryService implements PortfolioPort {
     private final RiskPort riskPort;
 
     @Override
+    /**
+     * Loads a portfolio aggregate with positions while enforcing owner-level access.
+     */
     public Portfolio loadPortfolioWithPositions(UUID id, UUID principalId) {
         Portfolio portfolio = portfolioRepository.findByIdWithPositions(id)
                 .orElseThrow(() -> {
@@ -53,6 +59,9 @@ public class PortfolioQueryService implements PortfolioPort {
 
     // ── Portfolios list ──────────────────────────────────────────────────────
 
+    /**
+     * Builds portfolio cards with current valuation and compact risk indicators.
+     */
     public List<PortfolioDto> getPortfolios(UUID userId) {
         log.debug("Fetching portfolios for userId={}", userId);
 
@@ -106,6 +115,9 @@ public class PortfolioQueryService implements PortfolioPort {
 
     // ── Portfolio ──────────────────────────────────────────────────────────────
 
+    /**
+     * Returns a single portfolio overview enriched with valuation and trend metrics.
+     */
     public PortfolioDto getPortfolio(UUID id, UUID principalId) {
         log.debug("Fetching portfolio with id={}", id);
 
@@ -161,6 +173,9 @@ public class PortfolioQueryService implements PortfolioPort {
 
     // ── Summary ──────────────────────────────────────────────────────────────
 
+    /**
+     * Produces headline KPI metrics for a selected date range in the dashboard.
+     */
     public PortfolioSummaryDto getSummary(UUID id, String range, UUID principalId) {
         log.debug("Building summary portfolioId={} range={}", id, range);
 
@@ -250,6 +265,9 @@ public class PortfolioQueryService implements PortfolioPort {
 
     // ── Positions ────────────────────────────────────────────────────────────
 
+    /**
+     * Returns per-position analytics including value, change, and contribution metrics.
+     */
     public List<PositionDto> getPositions(UUID id, UUID principalId) {
         Portfolio portfolio = loadPortfolioWithPositions(id, principalId);
         List<PortfolioPosition> positions = portfolio.getPositions();
@@ -340,6 +358,9 @@ public class PortfolioQueryService implements PortfolioPort {
 
     // ── Composition ──────────────────────────────────────────────────────────
 
+    /**
+     * Computes sector allocation percentages for portfolio composition charts.
+     */
     public List<CompositionEntryDto> getComposition(UUID id, UUID principalId) {
         log.debug("Building composition portfolioId={}", id);
 
@@ -380,6 +401,9 @@ public class PortfolioQueryService implements PortfolioPort {
 
     // ── Volatility ───────────────────────────────────────────────────────────
 
+    /**
+     * Computes rolling volatility points for the selected analysis range.
+     */
     public List<VolatilityPointDto> getVolatility(UUID id, String range, UUID principalId) {
         log.debug("Calculating volatility portfolioId={} range={}", id, range);
 
@@ -421,6 +445,9 @@ public class PortfolioQueryService implements PortfolioPort {
 
     // ── Alerts ───────────────────────────────────────────────────────────────
 
+    /**
+     * Generates user-facing risk alerts derived from concentration and exposure checks.
+     */
     public List<RiskAlertDto> getAlerts(UUID id, UUID principalId) {
         log.debug("Generating risk alerts portfolioId={}", id);
 
@@ -512,6 +539,9 @@ public class PortfolioQueryService implements PortfolioPort {
 
     // ── Risk  ──────────────────────────────────────────────────────
 
+    /**
+     * Returns medium-horizon risk metrics and their trend deltas.
+     */
     public RiskMetricsDto getRiskMetrics(UUID portfolioId, String range, UUID userId) {
         log.debug("Building risk metrics portfolioId={} range={}", portfolioId, range);
 
@@ -572,6 +602,9 @@ public class PortfolioQueryService implements PortfolioPort {
         );
     }
 
+    /**
+     * Builds a VaR report with portfolio-level, per-asset, and distribution breakdowns.
+     */
     public VaRReportDto getVaRReport(UUID portfolioId, double confidenceLevel,
                                      int timeHorizonDays, UUID userId) {
         log.debug("Building VaR report portfolioId={} cl={} horizon={}",
@@ -738,6 +771,9 @@ public class PortfolioQueryService implements PortfolioPort {
         );
     }
 
+    /**
+     * Calculates an asset return correlation matrix for the selected range.
+     */
     public CorrelationMatrixDto getCorrelationMatrix(UUID portfolioId, String range, UUID userId) {
         log.debug("Building correlation matrix portfolioId={} range={}", portfolioId, range);
 
