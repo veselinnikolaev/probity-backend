@@ -1,6 +1,10 @@
 package me.veselin.probity.bff.dto.simulation;
 
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 
 import java.util.UUID;
 
@@ -32,4 +36,3 @@ public record RunSimulationRequest(
         @DecimalMax(value = "200.0", message = "assumedVolatilityPercent must be ≤ 200")
         Double assumedVolatilityPercent
 ) {}
-

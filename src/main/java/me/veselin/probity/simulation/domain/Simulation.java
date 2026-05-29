@@ -1,6 +1,9 @@
 package me.veselin.probity.simulation.domain;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -84,4 +87,24 @@ public class Simulation extends BaseEntitySoftDelete {
     @Column(name = "result_payload", nullable = false, updatable = false,
             columnDefinition = "jsonb")
     private SimulationPayload resultPayload;
+
+    // ── Identity ──────────────────────────────────────────────────────────────
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Simulation that)) return false;
+        return getId() != null && getId().equals(that.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "Simulation{portfolioId=%s, userId=%s, paths=%d, horizon=%dd}"
+                .formatted(portfolioId, userId, numberOfSimulations, timeHorizonDays);
+    }
 }

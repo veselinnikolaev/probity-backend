@@ -1,6 +1,12 @@
 package me.veselin.probity.portfolio.domain;
 
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -9,6 +15,7 @@ import me.veselin.probity.portfolio.exception.PositionNotFoundException;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -40,7 +47,7 @@ public class Portfolio extends BaseEntitySoftDelete {
             orphanRemoval = true,
             fetch = FetchType.LAZY
     )
-    private final List<PortfolioPosition> positions = new java.util.ArrayList<>();
+    private final List<PortfolioPosition> positions = new ArrayList<>();
 
     // -------------------------------------------------------------------------
     // Factory

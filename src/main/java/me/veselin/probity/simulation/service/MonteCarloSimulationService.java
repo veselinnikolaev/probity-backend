@@ -37,15 +37,22 @@ import java.util.stream.IntStream;
  */
 public class MonteCarloSimulationService {
 
-    // 90 trading days (~4 months) of history used to derive μ and σ when
-    // the caller does not supply explicit overrides.
-    private static final int HISTORY_DAYS = 90;
+    // Historical data parameters
+    private static final int HISTORY_DAYS = 90; // Trading days (~4 months) used to derive μ and σ
+    private static final int TRADING_DAYS = 252; // Standard trading days per year
 
     // Percentile bands materialised as path envelopes in the response
     private static final int[] PERCENTILES = {5, 10, 25, 50, 75, 90, 95};
 
     // Distribution histogram bucket count
-    private static final int BUCKET_COUNT = 30;
+    private static final int BUCKET_COUNT = 30; // Number of bins for final value distribution histogram
+
+    // Risk outcome thresholds
+    private static final double THRESHOLD_10PCT_LOSS = 0.90; // Portfolio value threshold for 10% loss scenario
+    private static final double THRESHOLD_20PCT_LOSS = 0.80; // Portfolio value threshold for 20% loss scenario
+
+    // Default volatility fallback
+    private static final double DEFAULT_ANNUAL_VOLATILITY = 0.15; // 15% default when insufficient data
 
     private final PortfolioPort portfolioPort;
     private final SimulationRepository simulationRepository;
@@ -201,7 +208,7 @@ public class MonteCarloSimulationService {
         if (hasReturnOverride && hasVolOverride) {
             double annualReturn = request.assumedReturnPercent() / 100.0;
             double annualVol = request.assumedVolatilityPercent() / 100.0;
-            return new double[]{annualReturn / 252.0, annualVol / Math.sqrt(252.0)};
+            return new double[]{annualReturn / TRADING_DAYS, annualVol / Math.sqrt(TRADING_DAYS)};
         }
 
         // Fetch historical bars to derive empirical μ and σ
@@ -223,11 +230,11 @@ public class MonteCarloSimulationService {
 
         double annualVol = portfolioReturns.size() >= 2
                 ? riskPort.annualisedVolatility(portfolioReturns) / 100.0  // convert % → decimal
-                : 0.15;
+                : DEFAULT_ANNUAL_VOLATILITY;
 
         double annualReturn = hasReturnOverride
                 ? request.assumedReturnPercent() / 100.0
-                : portfolioReturns.stream().mapToDouble(Double::doubleValue).average().orElse(0.0) * 252.0;
+                : portfolioReturns.stream().mapToDouble(Double::doubleValue).average().orElse(0.0) * TRADING_DAYS;
 
         log.info("annualVol={} annualReturn={} dailyReturn={} dailyVol={}",
                 annualVol, annualReturn,
@@ -238,7 +245,7 @@ public class MonteCarloSimulationService {
                 ? request.assumedVolatilityPercent() / 100.0
                 : annualVol;
 
-        return new double[]{annualReturn / 252.0, useVol / Math.sqrt(252.0)};
+        return new double[]{annualReturn / TRADING_DAYS, useVol / Math.sqrt(TRADING_DAYS)};
     }
 
     private List<Double> buildPortfolioReturns(List<PortfolioPosition> positions,
@@ -287,8 +294,8 @@ public class MonteCarloSimulationService {
 
     private Outcomes computeOutcomes(double[] sorted, double currentValue,
                                      int n, double confidenceLevel) {
-        double threshold10 = currentValue * 0.90;
-        double threshold20 = currentValue * 0.80;
+        double threshold10 = currentValue * THRESHOLD_10PCT_LOSS;
+        double threshold20 = currentValue * THRESHOLD_20PCT_LOSS;
 
         long count10 = 0, count20 = 0;
         for (double v : sorted) {

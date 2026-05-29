@@ -23,7 +23,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -36,7 +44,19 @@ import java.util.stream.Collectors;
  */
 public class PortfolioQueryService implements PortfolioPort {
 
+    // Risk and portfolio calculation thresholds
     private static final int MIN_RETURNS_FOR_METRICS = 5;
+    private static final int PORTFOLIO_LOOKBACK_DAYS = 30; // Historical price window for standard analysis
+    private static final int VOLATILITY_WINDOW_DAYS = 20; // Rolling volatility calculation window (trading days)
+    private static final int SPARKLINE_POINTS = 7; // Number of points in sparkline downsampling
+    private static final int SECTOR_CONCENTRATION_THRESHOLD = 40; // Sector weight threshold for concentration alerts (%)
+    private static final int CRYPTO_EXPOSURE_THRESHOLD = 10; // Crypto weight threshold for exposure alerts (%)
+    private static final int VAR_LOOKBACK_DAYS = 60; // Historical data for VaR report and distribution
+    private static final int VAR_SPARKLINE_DAYS = 30; // Historical points for VaR sparkline
+    private static final int VAR_ROLLING_WINDOW_DAYS = 20; // Rolling window for VaR sparkline calculation (trading days)
+    private static final double RETURN_DISTRIBUTION_BIN_WIDTH = 0.02; // 2% bands for return histogram buckets
+    private static final double TRADING_DAYS = 252.0; // Trading days per year for volatility scaling
+
     private final PortfolioRepository portfolioRepository;
     private final MarketDataPort marketDataPort;
     private final RiskPort riskPort;
@@ -74,9 +94,9 @@ public class PortfolioQueryService implements PortfolioPort {
                     double total =
                             computeTotalValue(positions, prices);
 
-                    // Fetch 30d bars for volatility, sharpe, sparkline
+                    // Fetch historical bars for volatility, sharpe, sparkline
                     LocalDate to = TradingUtil.lastCompletedTradingDay();
-                    LocalDate from = to.minusDays(30);
+                    LocalDate from = to.minusDays(PORTFOLIO_LOOKBACK_DAYS);
                     Map<String, List<PriceBar>> bars =
                             fetchBars(positions, from, to);
 
@@ -94,7 +114,7 @@ public class PortfolioQueryService implements PortfolioPort {
                             ? riskPort.annualisedVolatility(returns) : 0.0;
                     double sharpe = returns.size() >= 2
                             ? riskPort.sharpeRatio(returns) : 0.0;
-                    List<Double> spark = SeriesUtil.downsample(values, 7);
+                    List<Double> spark = SeriesUtil.downsample(values, SPARKLINE_POINTS);
 
                     String createdAt = p.getCreatedAt() != null
                             ? p.getCreatedAt().toString() : null;
@@ -135,7 +155,7 @@ public class PortfolioQueryService implements PortfolioPort {
                             computeTotalValue(positions, prices);
 
                     LocalDate to = TradingUtil.lastCompletedTradingDay();
-                    LocalDate from = to.minusDays(30);
+                    LocalDate from = to.minusDays(PORTFOLIO_LOOKBACK_DAYS);
                     Map<String, List<PriceBar>> bars =
                             fetchBars(positions, from, to);
 
@@ -153,7 +173,7 @@ public class PortfolioQueryService implements PortfolioPort {
                             ? riskPort.annualisedVolatility(returns) : 0.0;
                     double sharpe = returns.size() >= 2
                             ? riskPort.sharpeRatio(returns) : 0.0;
-                    List<Double> spark = SeriesUtil.downsample(values, 7);
+                    List<Double> spark = SeriesUtil.downsample(values, SPARKLINE_POINTS);
 
                     String createdAt = portfolio.getCreatedAt() != null
                             ? portfolio.getCreatedAt().toString() : null;
@@ -239,17 +259,17 @@ public class PortfolioQueryService implements PortfolioPort {
         List<Double> spark = SeriesUtil.downsample(portfolioValues, 7);
         List<Double> returnSpark = SeriesUtil.downsample(dailyReturns, 7);
         List<Double> volSpark = SeriesUtil.downsample(
-                riskPort.rollingVolatilityFromReturns(dailyReturns, 20), 7);
+                riskPort.rollingVolatilityFromReturns(dailyReturns, VOLATILITY_WINDOW_DAYS), SPARKLINE_POINTS);
 
         // buildRollingMetric slices must be returns, not raw values — pass
         // dailyReturns instead of portfolioValues so the lambda receives
         // pre-converted percentage changes without needing toDailyReturns().
         List<Double> sharpeSpark = dailyReturns.size() >= MIN_RETURNS_FOR_METRICS
-                ? buildRollingMetric(dailyReturns, 7, riskPort::sharpeRatio)
+                ? buildRollingMetric(dailyReturns, SPARKLINE_POINTS, riskPort::sharpeRatio)
                 : List.of();
 
         List<Double> varSpark = dailyReturns.size() >= MIN_RETURNS_FOR_METRICS
-                ? buildRollingMetric(dailyReturns, 7, slice -> riskPort.var95(currentValue, slice))
+                ? buildRollingMetric(dailyReturns, SPARKLINE_POINTS, slice -> riskPort.var95(currentValue, slice))
                 : List.of();
         SparklineDto sparkline = new SparklineDto(spark, returnSpark, volSpark, sharpeSpark, varSpark);
 
@@ -274,7 +294,7 @@ public class PortfolioQueryService implements PortfolioPort {
         if (positions.isEmpty()) return List.of();
 
         LocalDate to = TradingUtil.lastCompletedTradingDay();
-        LocalDate from = to.minusDays(30);
+        LocalDate from = to.minusDays(PORTFOLIO_LOOKBACK_DAYS);
 
         Map<String, List<PriceBar>> barsByTicker = positions.stream()
                 .map(pos -> pos.getAsset().getTicker())
@@ -423,7 +443,7 @@ public class PortfolioQueryService implements PortfolioPort {
         List<Double> values = new ArrayList<>(valueByDate.values());
         List<LocalDate> dates = new ArrayList<>(valueByDate.keySet());
 
-        List<Double> rollingVol = riskPort.rollingVolatility(values, 20);  // let rollingVolatility handle conversion
+        List<Double> rollingVol = riskPort.rollingVolatility(values, VOLATILITY_WINDOW_DAYS);  // let rollingVolatility handle conversion
 
         // rollingVol is shorter than dailyReturns by (window - 1) = 19 bars.
         // Align to the tail of the dates list so each point maps to the correct date.
@@ -485,7 +505,7 @@ public class PortfolioQueryService implements PortfolioPort {
 
         // Sector concentration alerts
         sectorWeights.forEach((sector, weight) -> {
-            if (weight > 40) {
+            if (weight > SECTOR_CONCENTRATION_THRESHOLD) {
                 List<String> affected = portfolio.getPositions().stream()
                         .filter(pos -> pos.getAsset().getSector().getLabel().equals(sector))
                         .map(pos -> pos.getAsset().getTicker())
@@ -509,7 +529,7 @@ public class PortfolioQueryService implements PortfolioPort {
                 })
                 .sum();
 
-        if (cryptoWeight > 10) {
+        if (cryptoWeight > CRYPTO_EXPOSURE_THRESHOLD) {
             List<String> cryptoTickers = portfolio.getPositions().stream()
                     .filter(pos -> pos.getAsset().getType() == AssetType.CRYPTO)
                     .map(pos -> pos.getAsset().getTicker())
@@ -615,7 +635,7 @@ public class PortfolioQueryService implements PortfolioPort {
         if (positions.isEmpty()) return VaRReportDto.empty(confidenceLevel, timeHorizonDays);
 
         LocalDate to = TradingUtil.lastCompletedTradingDay();
-        LocalDate from = to.minusDays(60); // enough history for distribution + sparkline
+        LocalDate from = to.minusDays(VAR_LOOKBACK_DAYS); // enough history for distribution + sparkline
 
         Map<String, List<PriceBar>> barsByTicker =
                 fetchBars(positions, from, to);
@@ -634,15 +654,15 @@ public class PortfolioQueryService implements PortfolioPort {
         double currentValue = DataUtil.lastOrZero(portfolioValues);
         double vol = riskPort.annualisedVolatility(dailyReturns);
 
-        // Z-score lookup
+        // Z-score lookup based on confidence level
         double z = switch ((int) Math.round(confidenceLevel * 100)) {
-            case 90 -> 1.282;
-            case 99 -> 2.326;
-            default -> 1.645; // 95
+            case 90 -> 1.282; // 90% confidence z-score
+            case 99 -> 2.326; // 99% confidence z-score
+            default -> 1.645; // 95% confidence z-score (default)
         };
 
         // Daily vol from annualised — σ_daily = σ_annual / √252
-        double dailyVol = vol / Math.sqrt(252);
+        double dailyVol = vol / Math.sqrt(TRADING_DAYS);
         // Scale to horizon: σ_T = σ_daily × √T
         double horizonVol = dailyVol * Math.sqrt(timeHorizonDays);
         double meanDailyReturn = dailyReturns.stream()
@@ -679,7 +699,7 @@ public class PortfolioQueryService implements PortfolioPort {
 
             List<Double> assetReturns = DataUtil.toReturnsFromBars(bars);
             double assetVol = riskPort.annualisedVolatility(assetReturns);
-            double assetDailyVol = assetVol / Math.sqrt(252);
+            double assetDailyVol = assetVol / Math.sqrt(TRADING_DAYS);
             double assetHorizonVol = assetDailyVol * Math.sqrt(timeHorizonDays);
             double assetMean = assetReturns.stream()
                     .mapToDouble(Double::doubleValue).average().orElse(0.0);
@@ -703,15 +723,15 @@ public class PortfolioQueryService implements PortfolioPort {
                                 ? (Math.abs(a.contribution()) / totalContribution) * 100 : 0.0
                 )).toList();
 
-        // ── Historical sparkline — 30-point rolling VaR ───────────────────────
-        // Use last 30 values from portfolioValues; for each point compute VaR
-        // over a trailing 20-bar window so each point is a real VaR estimate
+        // ── Historical sparkline — rolling VaR ────────────────────────────────
+        // Use last N values from portfolioValues; for each point compute VaR
+        // over a trailing window so each point is a real VaR estimate
         List<Double> spark = new ArrayList<>();
-        int sparkPoints = Math.min(30, portfolioValues.size());
+        int sparkPoints = Math.min(VAR_SPARKLINE_DAYS, portfolioValues.size());
         int startIdx = portfolioValues.size() - sparkPoints;
 
         for (int i = startIdx; i < portfolioValues.size(); i++) {
-            int windowStart = Math.max(0, i - 20);
+            int windowStart = Math.max(0, i - VAR_ROLLING_WINDOW_DAYS);
             // Need at least 2 returns: returns are between bars, so need i > windowStart
             if (i <= windowStart) {
                 spark.add(Math.abs(valueAtRisk)); // fallback
@@ -731,7 +751,7 @@ public class PortfolioQueryService implements PortfolioPort {
             spark.add(Math.abs(windowVar));
         }
 
-        // ── Return distribution — bucket daily returns into 2% bands ─────────
+        // ── Return distribution — bucket daily returns into bins ────────────────
         double[] breakpoints = {-0.10, -0.08, -0.06, -0.04, -0.02, 0.00, 0.02, 0.04, 0.06, 0.08, 0.10};
         String[] labels = {
                 "-10% to -8%", "-8% to -6%", "-6% to -4%", "-4% to -2%", "-2% to 0%",
@@ -750,7 +770,8 @@ public class PortfolioQueryService implements PortfolioPort {
 
         List<VaRReportDto.ReturnBucketDto> distribution = new ArrayList<>();
         for (int i = 0; i < labels.length; i++) {
-            distribution.add(new VaRReportDto.ReturnBucketDto(labels[i], counts[i], i < 5));
+            boolean isNegativeReturn = i < (labels.length / 2); // bucket index < midpoint
+            distribution.add(new VaRReportDto.ReturnBucketDto(labels[i], counts[i], isNegativeReturn));
         }
 
         VaRReportDto.MethodologyDto methodology = new VaRReportDto.MethodologyDto(
@@ -832,7 +853,7 @@ public class PortfolioQueryService implements PortfolioPort {
 
         for (int i = 0; i < points; i++) {
             int end = Math.min((int) Math.round(i * step) + 1, values.size());
-            int start = Math.max(0, end - 30);
+            int start = Math.max(0, end - VAR_SPARKLINE_DAYS);
             List<Double> slice = values.subList(start, end);
             result.add(slice.size() < 2 ? null : metric.apply(slice));
         }

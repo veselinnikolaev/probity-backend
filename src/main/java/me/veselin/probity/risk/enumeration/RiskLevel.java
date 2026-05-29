@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 @Getter
 @RequiredArgsConstructor
 public enum RiskLevel {
+    // Risk level score bands: LOW (0-34), MODERATE (35-59), HIGH (60-100)
     LOW(0, 34),
     MODERATE(35, 59),
     HIGH(60, 100);

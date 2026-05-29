@@ -21,8 +21,12 @@ public class RiskCalculator implements RiskPort {
     @Value("${probity.risk.risk-free-rate:0.045}")
     private double riskFreeRate;
 
+    // Risk calculation constants
     private static final double TRADING_DAYS = 252.0;
-    private static final double Z_95 = 1.645;
+    private static final double Z_95 = 1.645; // 95% confidence level z-score
+    private static final int VOLATILITY_THRESHOLD = 15; // Volatility threshold for risk score addon (%)
+    private static final int VOL_ADDON_FACTOR = 10; // Volatility band width for risk score calculation
+    private static final int RISK_SCORE_INCREMENT = 5; // Points added per volatility band
 
     @Override
     public double annualisedVolatility(List<Double> dailyReturns) {
@@ -76,9 +80,9 @@ public class RiskCalculator implements RiskPort {
     @Override
     public int riskScore(String assetType, double annualisedVol) {
         int base = AssetType.valueOf(assetType.toUpperCase()).getBaseRiskScore();
-        int volAddon = annualisedVol <= 15
+        int volAddon = annualisedVol <= VOLATILITY_THRESHOLD
                 ? 0
-                : (int) ((annualisedVol - 15) / 10 * 5);
+                : (int) ((annualisedVol - VOLATILITY_THRESHOLD) / VOL_ADDON_FACTOR * RISK_SCORE_INCREMENT);
         return Math.min(100, base + volAddon);
     }
 
