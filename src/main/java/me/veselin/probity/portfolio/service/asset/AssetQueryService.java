@@ -6,6 +6,7 @@ import me.veselin.probity.marketdata.finance.FinanceAdapter;
 import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.portfolio.domain.Asset;
 import me.veselin.probity.portfolio.dto.AssetSearchResultDto;
+import me.veselin.probity.portfolio.port.asset.AssetQueryPort;
 import me.veselin.probity.portfolio.repository.AssetRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -24,7 +25,7 @@ import java.util.Map;
 /**
  * Query-side asset lookup service combining local search with external metadata fallback.
  */
-public class AssetQueryService {
+public class AssetQueryService implements AssetQueryPort {
 
     private static final int MAX_DB_RESULTS    = 8;
     private static final int MIN_TICKER_LENGTH = 1;

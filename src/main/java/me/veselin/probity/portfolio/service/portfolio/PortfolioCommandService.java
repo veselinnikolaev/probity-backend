@@ -13,6 +13,7 @@ import me.veselin.probity.portfolio.domain.Portfolio;
 import me.veselin.probity.portfolio.domain.PortfolioPosition;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
 import me.veselin.probity.portfolio.exception.PositionNotFoundException;
+import me.veselin.probity.portfolio.port.portfolio.PortfolioCommandPort;
 import me.veselin.probity.portfolio.repository.PortfolioRepository;
 import me.veselin.probity.portfolio.service.asset.AssetResolver;
 import org.springframework.security.access.AccessDeniedException;
@@ -29,7 +30,7 @@ import java.util.UUID;
 /**
  * Command-side application service for portfolio mutations.
  */
-public class PortfolioCommandService {
+public class PortfolioCommandService implements PortfolioCommandPort {
 
     private final PortfolioRepository portfolioRepository;
     private final AssetResolver assetResolver;
@@ -38,6 +39,7 @@ public class PortfolioCommandService {
     /**
      * Creates a portfolio for a user while enforcing unique portfolio names per owner.
      */
+    @Override
     public PortfolioCreatedDto create(String name, UUID userId) {
         if (portfolioRepository.existsByNameAndUserId(name, userId)) {
             throw new ConflictException("Portfolio '" + name + "' already exists");
@@ -49,6 +51,7 @@ public class PortfolioCommandService {
     /**
      * Adds a position to a portfolio and returns the created position identifier.
      */
+    @Override
     public PositionCreatedDto addPosition(UUID portfolioId,
                                           PositionCreateRequest request,
                                           UUID userId) {
@@ -83,6 +86,7 @@ public class PortfolioCommandService {
     /**
      * Updates the quantity of an existing position using the latest market price.
      */
+    @Override
     public void updatePosition(UUID portfolioId, UUID positionId,
                                PositionUpdateRequest request, UUID userId) {
         Portfolio portfolio = portfolioRepository.findByIdWithPositions(portfolioId)
@@ -106,6 +110,7 @@ public class PortfolioCommandService {
     /**
      * Removes a position from the portfolio owned by the requesting user.
      */
+    @Override
     public void deletePosition(UUID portfolioId, UUID positionId, UUID userId) {
         Portfolio portfolio = portfolioRepository.findByIdWithPositions(portfolioId)
                 .orElseThrow(() -> new PortfolioNotFoundException("Portfolio not found: " + portfolioId));

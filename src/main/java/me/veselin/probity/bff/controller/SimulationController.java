@@ -6,7 +6,7 @@ import me.veselin.probity.bff.dto.auth.UserPrincipal;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.bff.dto.simulation.RunSimulationRequest;
 import me.veselin.probity.bff.dto.simulation.SimulationResultDto;
-import me.veselin.probity.simulation.service.MonteCarloSimulationService;
+import me.veselin.probity.simulation.port.SimulationPort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,7 +25,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SimulationController {
 
-    private final MonteCarloSimulationService simulationService;
+    private final SimulationPort simulationPort;
 
     /**
      * POST /simulations/run
@@ -37,7 +37,7 @@ public class SimulationController {
             @AuthenticationPrincipal UserPrincipal principal,
             UriComponentsBuilder ucb) {
 
-        SimulationResultDto result = simulationService.run(request, principal.id());
+        SimulationResultDto result = simulationPort.run(request, principal.id());
 
         URI location = ucb.path(ApiRoutes.Simulations.SIMULATION)
                 .buildAndExpand(result.id())
@@ -55,7 +55,7 @@ public class SimulationController {
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        return ResponseEntity.ok(simulationService.get(id, principal.id()));
+        return ResponseEntity.ok(simulationPort.get(id, principal.id()));
     }
 
     /**
@@ -67,6 +67,6 @@ public class SimulationController {
             @RequestParam UUID portfolioId,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        return ResponseEntity.ok(simulationService.listForPortfolio(portfolioId, principal.id()));
+        return ResponseEntity.ok(simulationPort.listForPortfolio(portfolioId, principal.id()));
     }
 }

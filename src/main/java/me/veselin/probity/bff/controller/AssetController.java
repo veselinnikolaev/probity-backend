@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import me.veselin.probity.bff.security.rate_limit.RateLimit;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.portfolio.dto.AssetSearchResultDto;
+import me.veselin.probity.portfolio.port.asset.AssetQueryPort;
 import me.veselin.probity.portfolio.service.asset.AssetQueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,7 +17,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AssetController {
 
-    private final AssetQueryService assetQueryService;
+    private final AssetQueryPort assetQueryPort;
 
     /**
      * GET /api/v1/assets/search?q=AAPL
@@ -29,7 +30,7 @@ public class AssetController {
             @RequestParam(name = "q", defaultValue = "") String q) {
 
         if (q.isBlank()) return ResponseEntity.ok(List.of());
-        return ResponseEntity.ok(assetQueryService.search(q));
+        return ResponseEntity.ok(assetQueryPort.search(q));
     }
 }
 

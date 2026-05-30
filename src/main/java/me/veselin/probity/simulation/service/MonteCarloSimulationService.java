@@ -8,7 +8,7 @@ import me.veselin.probity.marketdata.domain.PriceBar;
 import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.portfolio.domain.Portfolio;
 import me.veselin.probity.portfolio.domain.PortfolioPosition;
-import me.veselin.probity.portfolio.port.PortfolioPort;
+import me.veselin.probity.portfolio.port.portfolio.PortfolioQueryPort;
 import me.veselin.probity.risk.dto.DistributionStatistics;
 import me.veselin.probity.risk.port.RiskPort;
 import me.veselin.probity.simulation.domain.Simulation;
@@ -16,6 +16,7 @@ import me.veselin.probity.simulation.domain.SimulationPayload;
 import me.veselin.probity.simulation.domain.SimulationPayload.*;
 import me.veselin.probity.bff.dto.simulation.RunSimulationRequest;
 import me.veselin.probity.bff.dto.simulation.SimulationResultDto;
+import me.veselin.probity.simulation.port.SimulationPort;
 import me.veselin.probity.simulation.exception.SimulationNotFoundException;
 import me.veselin.probity.simulation.mapper.SimulationMapper;
 import me.veselin.probity.simulation.repository.SimulationRepository;
@@ -35,7 +36,7 @@ import java.util.stream.IntStream;
 /**
  * Runs and retrieves Monte Carlo simulations for portfolio scenarios.
  */
-public class MonteCarloSimulationService {
+public class MonteCarloSimulationService implements SimulationPort {
 
     // Historical data parameters
     private static final int HISTORY_DAYS = 90; // Trading days (~4 months) used to derive μ and σ
@@ -54,7 +55,7 @@ public class MonteCarloSimulationService {
     // Default volatility fallback
     private static final double DEFAULT_ANNUAL_VOLATILITY = 0.15; // 15% default when insufficient data
 
-    private final PortfolioPort portfolioPort;
+    private final PortfolioQueryPort portfolioQueryPort;
     private final SimulationRepository simulationRepository;
     private final MarketDataPort marketDataPort;
     private final RiskPort riskPort;
@@ -66,11 +67,12 @@ public class MonteCarloSimulationService {
     /**
      * Executes a new simulation run for a user-owned portfolio and persists its payload.
      */
+    @Override
     public SimulationResultDto run(RunSimulationRequest request, UUID userId) {
         log.info("Running Monte Carlo simulation portfolioId={} userId={} paths={} horizon={}d",
                 request.portfolioId(), userId, request.numberOfSimulations(), request.timeHorizonDays());
 
-        Portfolio portfolio = portfolioPort.loadPortfolioWithPositions(request.portfolioId(), userId);
+        Portfolio portfolio = portfolioQueryPort.loadPortfolioWithPositions(request.portfolioId(), userId);
         List<PortfolioPosition> positions = portfolio.getPositions();
 
         if (positions.isEmpty()) {
@@ -145,6 +147,7 @@ public class MonteCarloSimulationService {
     /**
      * Loads a single simulation result owned by the requesting user.
      */
+    @Override
     public SimulationResultDto get(UUID simulationId, UUID userId) {
         Simulation simulation = simulationRepository.findByIdAndUserId(simulationId, userId)
                 .orElseThrow(() -> new SimulationNotFoundException(
@@ -156,6 +159,7 @@ public class MonteCarloSimulationService {
     /**
      * Lists simulations previously run for a portfolio by the requesting user.
      */
+    @Override
     public List<SimulationResultDto> listForPortfolio(UUID portfolioId, UUID userId) {
         // Ownership of the portfolio is implicitly enforced: we only return
         // rows where user_id matches — no separate portfolio auth needed.
