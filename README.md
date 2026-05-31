@@ -142,9 +142,3 @@ Notes:
 - **Integration tests fail locally**
   - Cause: Testcontainers cannot start without Docker.
   - Fix: start Docker Desktop and rerun tests.
-
-## Recommended Next Refactors
-
-- Split `PortfolioQueryService` into smaller use-case-focused query services.
-- Normalize naming (`principalId` vs `userId`) in read APIs for consistency.
-- Replace wildcard imports (`*`) in large classes for readability.
