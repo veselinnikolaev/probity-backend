@@ -17,7 +17,6 @@ import java.util.List;
  * authenticated user — no admin privilege escalation possible here.
  */
 @RestController
-@RequestMapping(ApiRoutes.Users.ME)
 @RequiredArgsConstructor
 public class UserSettingsController {
 
@@ -30,7 +29,7 @@ public class UserSettingsController {
      * @param principal authenticated user principal
      * @return profile response
      */
-    @GetMapping
+    @GetMapping(ApiRoutes.Users.ME)
     public ResponseEntity<ProfileResponse> getProfile(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(settingsPort.getProfile(principal.id()));
@@ -44,7 +43,7 @@ public class UserSettingsController {
      * @param request profile update request
      * @return updated profile response
      */
-    @PatchMapping
+    @PatchMapping(ApiRoutes.Users.ME)
     public ResponseEntity<ProfileResponse> updateProfile(
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody UpdateProfileRequest request) {
@@ -134,7 +133,7 @@ public class UserSettingsController {
      * @param refreshToken refresh token from cookie (optional)
      * @return 204 NO CONTENT
      */
-    @DeleteMapping
+    @DeleteMapping(ApiRoutes.Users.ME)
     public ResponseEntity<Void> deleteAccount(
             @AuthenticationPrincipal UserPrincipal principal,
             @CookieValue(name = "access_token", required = false) String accessToken,
