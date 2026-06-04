@@ -1,27 +1,138 @@
 # Probity Backend
 
-Probity is a portfolio management and risk analytics platform. The backend provides secure portfolio CRUD, market data ingestion, risk metric computation, and Monte Carlo simulation APIs for the frontend. It is designed around explicit domain boundaries so portfolio analytics can evolve independently from auth, market-data synchronization, and simulation workloads.
+Probity is a low-latency fintech portfolio risk management platform with concurrent Monte Carlo simulations. The backend provides secure portfolio CRUD, market data ingestion, risk metric computation, and high-performance simulation APIs. Built with Java 21 virtual threads and hexagonal architecture, it delivers sub-second simulation results for 10,000+ path Monte Carlo runs while maintaining clean domain boundaries.
 
-The service exposes BFF-oriented endpoints under `bff/`, while domain/application logic lives in bounded contexts (`portfolio`, `marketdata`, `risk`, `simulation`, `auth`). PostgreSQL is the system of record, Redis is used for caching/session artifacts/rate-limit state, and Flyway owns schema evolution.
+## Project Overview
+
+Probity solves the challenge of real-time portfolio risk assessment by combining:
+- **Concurrent Monte Carlo Simulations**: Parallel GBM path generation using dedicated CPU-bound thread pools
+- **Virtual Thread I/O**: Java 21 Project Loom virtual threads for blocking network operations
+- **Domain-Driven Design**: Explicit bounded contexts (Auth, Portfolio, Simulation, Market Data, Risk)
+- **Hexagonal Architecture**: Clean separation between domain core and framework adapters
+- **Mathematical Rigor**: Geometric Brownian Motion, Value at Risk (VaR), and Pearson Correlation implementations
+
+## Architectural Blueprint
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         BFF Layer                                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │ Controllers  │  │   DTOs       │  │  Security    │          │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
+│         │                  │                  │                  │
+└─────────┼──────────────────┼──────────────────┼──────────────────┘
+          │                  │                  │
+┌─────────┼──────────────────┼──────────────────┼──────────────────┐
+│         │     Application Services             │                  │
+│  ┌──────▼──────┐  ┌──────▼──────┐  ┌────────▼──────┐          │
+│  │   Auth      │  │  Portfolio  │  │  Simulation   │          │
+│  │   Service   │  │   Service   │  │   Service    │          │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬───────┘          │
+└─────────┼──────────────────┼──────────────────┼──────────────────┘
+          │                  │                  │
+┌─────────┼──────────────────┼──────────────────┼──────────────────┐
+│         │      Domain Ports (Interfaces)       │                  │
+│  ┌──────▼──────┐  ┌──────▼──────┐  ┌────────▼──────┐          │
+│  │ AuthCommand │  │ Portfolio   │  │ Simulation   │          │
+│  │ Port        │  │ Port        │  │ Port         │          │
+│  └─────────────┘  └─────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
+          │                  │                  │
+┌─────────┼──────────────────┼──────────────────┼──────────────────┐
+│         │      Domain Core (Pure Business Logic)                  │
+│  ┌──────▼──────┐  ┌──────▼──────┐  ┌────────▼──────┐          │
+│  │   User      │  │  Portfolio   │  │  Simulation   │          │
+│  │   Entity    │  │  Aggregate   │  │  Aggregate    │          │
+│  └─────────────┘  └─────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
+          │                  │                  │
+┌─────────┼──────────────────┼──────────────────┼──────────────────┐
+│         │      Adapters (Infrastructure)                          │
+│  ┌──────▼──────┐  ┌──────▼──────┐  ┌────────▼──────┐          │
+│  │   JWT       │  │  JPA         │  │  Finance     │          │
+│  │   Service   │  │ Repository   │  │  Adapter     │          │
+│  └─────────────┘  └─────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Tech Stack Highlights
+
+- **Java 21**: Latest LTS with Project Loom virtual threads (JEP 444)
+- **Spring Boot 3.x**: Modern Spring framework with native image support
+- **Virtual Threads**: I/O-bound operations use `Executors.newVirtualThreadPerTaskExecutor()`
+- **Dedicated Thread Pools**: CPU-bound simulations use custom `ThreadPoolTaskExecutor` with `CallerRunsPolicy`
+- **PostgreSQL**: System of record with JSONB for simulation payloads
+- **Redis**: Caching, session management, and rate limiting
+- **Testcontainers**: Integration testing with real PostgreSQL and Redis
+- **Flyway**: Database schema migration management
+
+## Mathematical Foundations
+
+### Geometric Brownian Motion (GBM)
+
+The Monte Carlo simulation implements the discrete-time GBM equation:
+
+```
+S(t+Δt) = S(t) × exp((μ - ½σ²)Δt + σ√Δt × Z)
+```
+
+Where:
+- `S(t)` = portfolio value at time t
+- `μ` = annualized drift (daily return rate)
+- `σ` = annualized volatility (daily standard deviation)
+- `Δt` = time step (1 trading day = 1/252 years)
+- `Z` = standard normal random variable (Box-Muller transform)
+
+**Time Delta Annualization:**
+- Daily return: `dailyReturn = annualReturn / 252`
+- Daily volatility: `dailyVol = annualVol / √252`
+
+### Value at Risk (VaR)
+
+**Parametric VaR (95% confidence):**
+```
+VaR = portfolioValue × z₀.₉₅ × σ
+```
+
+**Empirical VaR (from sorted simulation distribution):**
+```
+VaR = sortedValues[floor((1 - confidenceLevel) × n)]
+```
+
+### Pearson Correlation
+
+```
+ρ(X,Y) = Cov(X,Y) / (σ_X × σ_Y)
+```
+
+Where covariance is computed as:
+```
+Cov(X,Y) = Σ((x_i - μ_X)(y_i - μ_Y)) / (n-1)
+```
+
+Edge cases handled:
+- Insufficient data (n < 2): returns 0.0
+- Zero variance: returns 0.0 (undefined mathematically)
+- Mismatched lengths: uses shorter length
 
 ## Architecture Overview
 
 - **Bounded contexts**
-  - `auth`: user identity, JWT lifecycle, refresh rotation/logout invalidation.
-  - `portfolio`: aggregate roots (`Portfolio`, `PortfolioPosition`, `Asset`) and read models for dashboard/risk views.
-  - `marketdata`: persisted OHLCV bars + adapter-backed gap filling.
-  - `risk`: quantitative calculations (volatility, Sharpe, VaR, drawdown, correlation).
-  - `simulation`: Monte Carlo runs and JSONB payload persistence.
+  - `auth`: user identity, JWT lifecycle, refresh rotation/logout invalidation
+  - `portfolio`: aggregate roots (`Portfolio`, `PortfolioPosition`, `Asset`) and read models
+  - `marketdata`: persisted OHLCV bars + adapter-backed gap filling
+  - `risk`: quantitative calculations (volatility, Sharpe, VaR, drawdown, correlation)
+  - `simulation`: Monte Carlo runs and JSONB payload persistence
 - **DDD style**
-  - Aggregate roots enforce invariants in domain methods.
-  - Soft-delete is centralized via `BaseEntitySoftDelete`.
+  - Aggregate roots enforce invariants in domain methods
+  - Soft-delete centralized via `BaseEntitySoftDelete`
 - **Ports/adapters**
-  - Ports like `RiskPort`, `MarketDataPort`, `PortfolioPort`, `AuthCommandPort` separate use-case code from implementations.
+  - Ports like `RiskPort`, `MarketDataPort`, `PortfolioPort`, `AuthCommandPort` separate use-case code from implementations
 - **CQRS split**
-  - Write paths are handled by command services (for example `PortfolioCommandService`).
-  - Read paths are assembled by query services (for example `PortfolioQueryService`).
+  - Write paths handled by command services (e.g., `PortfolioCommandService`)
+  - Read paths assembled by query services (e.g., `PortfolioQueryService`)
 - **BFF pattern**
-  - HTTP DTOs and controllers are grouped under `bff/` to shape API responses for frontend consumption.
+  - HTTP DTOs and controllers grouped under `bff/` to shape API responses
 
 ## Project Structure
 
@@ -44,38 +155,67 @@ Probity
 └─ pom.xml
 ```
 
-## Prerequisites
+## Getting Started
+
+### Prerequisites
 
 - Java 21
 - Maven 3.9+ (or use `./mvnw`)
 - Docker Desktop (recommended for local Postgres/Redis)
 
-## Run Locally (15-minute path)
+### Environment Configuration
 
-1. Copy env template:
-   - `cp .env.example .env` (or create `.env` manually on Windows).
-2. Fill required values in `.env` (`DB_*`, `REDIS_*`, `JWT_SECRET`).
-3. Start infrastructure:
-   - `docker compose up -d postgres redis`
-4. Start backend:
-   - `./mvnw spring-boot:run`
-5. Verify:
-   - Health endpoint: `GET http://localhost:8080/actuator/health`
+Set the following environment variables:
 
-Notes:
-- Flyway runs automatically on boot.
-- `spring.jpa.hibernate.ddl-auto=validate`, so schema must match migrations.
+```bash
+export JWT_SECRET="your_jwt_secret_minimum_32_characters_long"
+export DB_HOST="localhost"
+export DB_PORT="5432"
+export DB_NAME="probity"
+export DB_USERNAME="postgres"
+export DB_PASSWORD="postgres_password"
+export REDIS_HOST="localhost"
+export REDIS_PORT="6379"
+export REDIS_PASSWORD="redis_password"
+```
+
+**Important**: The `JWT_SECRET` must be at least 32 characters long for secure token signing.
+
+### Run Locally
+
+1. Start infrastructure:
+   ```bash
+   docker compose up -d postgres redis
+   ```
+
+2. Start backend:
+   ```bash
+   ./mvnw spring-boot:run
+   ```
+
+3. Verify:
+   ```bash
+   curl http://localhost:8080/actuator/health
+   ```
+
+### Run Tests
+
+Execute the full test suite:
+```bash
+./mvnw test
+```
+
+Run specific test classes:
+```bash
+./mvnw -Dtest=SimulationIntegrationTest test
+```
+
+**Note**: Integration tests use Testcontainers and require Docker to be running.
 
 ## Running With Docker Compose
 
 - Local infra only (recommended during development): `docker compose up -d postgres redis`
 - Full app profile from registry image: `docker compose --profile prod up -d`
-
-## Test Execution
-
-- Full test suite: `./mvnw test`
-- Single test class: `./mvnw -Dtest=SimulationIntegrationTest test`
-- Integration tests rely on Testcontainers dependencies in `pom.xml`; ensure Docker is running.
 
 ## Environment Variables
 
@@ -108,6 +248,8 @@ Notes:
   - Used for position quantities and price snapshots to avoid floating-point rounding drift in financial computations.
 - **JSONB payload for simulations**
   - Monte Carlo results are stored as one JSONB payload per run to optimize read-back and keep relational schema stable.
+- **Primitive arrays for simulation paths**
+  - Uses `double[][]` instead of `List<List<Double>>` to minimize GC overhead and memory footprint for large simulation runs.
 
 ## Common Workflows
 

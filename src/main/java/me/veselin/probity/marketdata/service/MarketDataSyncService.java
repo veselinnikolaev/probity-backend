@@ -6,6 +6,7 @@ import me.veselin.probity.marketdata.domain.PriceBar;
 import me.veselin.probity.marketdata.dto.PriceBarDto;
 import me.veselin.probity.marketdata.finance.FinanceAdapter;
 import me.veselin.probity.marketdata.repository.PriceBarRepository;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,8 @@ import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 @Service
 @Slf4j
@@ -21,6 +24,8 @@ import java.util.Set;
 public class MarketDataSyncService {
     private final PriceBarRepository repository;
     private final FinanceAdapter financeAdapter;
+
+    private final Executor ioExecutor;
 
     /**
      * Fetches bars from the remote adapter and persists any that are not already
@@ -33,6 +38,24 @@ public class MarketDataSyncService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void fetchAndPersist(String ticker, LocalDate from, LocalDate to) {
+        fetchAndPersistInternal(ticker, from, to);
+    }
+
+    /**
+     * Async version of fetchAndPersist that runs on the virtual thread executor.
+     * Returns a CompletableFuture for non-blocking I/O operations.
+     */
+    @Async("ioExecutor")
+    public CompletableFuture<Void> fetchAndPersistAsync(String ticker, LocalDate from, LocalDate to) {
+        try {
+            fetchAndPersistInternal(ticker, from, to);
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+
+    private void fetchAndPersistInternal(String ticker, LocalDate from, LocalDate to) {
         log.debug("Fetching bars from adapter ticker={} range={} - {}", ticker, from, to);
 
         List<PriceBarDto> bars;

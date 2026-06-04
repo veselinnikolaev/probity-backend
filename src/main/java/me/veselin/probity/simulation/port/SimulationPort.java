@@ -7,9 +7,9 @@ import java.util.List;
 import java.util.UUID;
 
 public interface SimulationPort {
-    SimulationResultDto run(RunSimulationRequest request, UUID userId);
+    SimulationResultDto runSimulation(RunSimulationRequest request, UUID userId);
 
-    SimulationResultDto get(UUID simulationId, UUID userId);
+    SimulationResultDto getSimulation(UUID simulationId, UUID userId);
 
-    List<SimulationResultDto> listForPortfolio(UUID portfolioId, UUID userId);
+    List<SimulationResultDto> listSimulations(UUID portfolioId, UUID userId);
 }

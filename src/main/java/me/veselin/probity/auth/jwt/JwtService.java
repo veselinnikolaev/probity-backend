@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -43,6 +44,8 @@ public class JwtService {
     private String refreshPrefix;
     @Value("${probity.jwt.blacklist-prefix}")
     private String blacklistedPrefix;
+    @Value("${probity.jwt.session-prefix}")
+    private String sessionPrefix;
 
     @PostConstruct
     /**
@@ -88,6 +91,43 @@ public class JwtService {
         } catch (Exception e) {
             throw new UnauthorizedException("Invalid token");
         }
+    }
+
+    /**
+     * Writes a session record to Redis when a user logs in.
+     * Key:   session:{userId}:{jti}
+     * Value: "{jti}|{deviceHint}|{ipAddress}|{issuedAtIso}"
+     * TTL:   matches the refresh token lifetime so sessions auto-expire.
+     *
+     * Called by UserCommandService#login after generating tokens.
+     */
+    public void recordSession(UUID userId, String jti, String deviceHint,
+                              String ipAddress, String issuedAt) {
+        String key   = sessionPrefix + userId + ":" + jti;
+        String value = jti + "|" + deviceHint + "|" + ipAddress + "|" + issuedAt;
+        redisTemplate.opsForValue().set(key, value, refreshExpirationTime, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Returns all Redis keys matching a glob pattern (e.g. "session:{userId}:*").
+     * Uses SCAN under the hood — safe for production unlike KEYS.
+     */
+    public Set<String> scanSessionKeys(String pattern) {
+        return redisTemplate.keys(pattern); // consider cursor-based scan for very large sets
+    }
+
+    /**
+     * Reads the raw session payload string for a given Redis key.
+     */
+    public String getRawSessionPayload(String key) {
+        return redisTemplate.opsForValue().get(key);
+    }
+
+    /**
+     * Deletes a session key from Redis. Returns true if the key existed.
+     */
+    public boolean deleteSessionKey(String key) {
+        return redisTemplate.delete(key);
     }
 
     public String extractUsername(String token) {

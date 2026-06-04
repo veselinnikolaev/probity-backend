@@ -7,12 +7,14 @@ import me.veselin.probity.marketdata.domain.PriceBar;
 import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.marketdata.repository.PriceBarRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -30,9 +32,9 @@ public class MarketDataService implements MarketDataPort {
     private final PriceBarRepository priceBarRepository;
     private final MarketDataSyncService marketDataSyncService;
 
-    // One monitor per ticker keeps concurrent requests for the same symbol serialized
+    // Track in-progress syncs per ticker to prevent redundant concurrent fetches
     // without blocking unrelated tickers against each other.
-    private final ConcurrentHashMap<String, Object> tickerLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CompletableFuture<Void>> syncInProgress = new ConcurrentHashMap<>();
 
     @Override
     /**
@@ -65,9 +67,11 @@ public class MarketDataService implements MarketDataPort {
     }
 
     @Override
+    @Cacheable(value = "marketData", key = "#ticker + ':' + #from + ':' + #to")
     /**
      * Returns historical daily bars for a ticker and date range.
      * Missing segments are fetched before read to keep callers stateless.
+     * Results are cached using composite key pattern to prevent redundant database hits.
      */
     public List<PriceBar> getHistoricalBars(String ticker, LocalDate from, LocalDate to) {
         String upper = ticker.toUpperCase();
@@ -97,7 +101,8 @@ public class MarketDataService implements MarketDataPort {
      *
      * <p>Does NOT use @Transactional at the method level — each fetchAndPersist
      * call opens its own REQUIRES_NEW transaction so partial successes are committed
-     * immediately. The per-ticker lock serializes concurrent callers for the same symbol.
+     * immediately. Uses atomic pattern with futures to prevent redundant concurrent
+     * fetches without blocking threads.
      */
     private void ensureDataExists(String ticker, LocalDate from, LocalDate to) {
         log.info("ensureDataExists ENTER ticker={} from={} to={}", ticker, from, to);
@@ -118,42 +123,53 @@ public class MarketDataService implements MarketDataPort {
             return;
         }
 
-        Object lock = tickerLocks.computeIfAbsent(ticker, k -> new Object());
+        // Atomic pattern: computeIfAbsent ensures only one thread performs the sync
+        // for a given ticker, while others wait on the same future
+        CompletableFuture<Void> syncFuture = syncInProgress.computeIfAbsent(ticker, k -> CompletableFuture.runAsync(() -> performSync(ticker, safeFrom, safeTo))
+                .whenComplete((result, error) -> syncInProgress.remove(ticker)));
 
-        synchronized (lock) {
-            try {
-                Optional<LocalDate> minOpt = priceBarRepository.findMinBarDate(ticker, safeFrom, safeTo);
-                Optional<LocalDate> maxOpt = priceBarRepository.findMaxBarDate(ticker, safeFrom, safeTo);
+        // Block until sync completes (maintains synchronous API contract)
+        try {
+            syncFuture.join();
+        } catch (Exception e) {
+            log.error("Sync failed for ticker={}", ticker, e);
+            syncInProgress.remove(ticker);
+        }
+    }
 
-                log.info("gap check ticker={} minOpt={} maxOpt={}", ticker, minOpt, maxOpt);
+    private void performSync(String ticker, LocalDate safeFrom, LocalDate safeTo) {
+        try {
+            Optional<LocalDate> minOpt = priceBarRepository.findMinBarDate(ticker, safeFrom, safeTo);
+            Optional<LocalDate> maxOpt = priceBarRepository.findMaxBarDate(ticker, safeFrom, safeTo);
 
-                if (minOpt.isEmpty()) {
-                    log.info("No data → full fetch ticker={} {} - {}", ticker, safeFrom, safeTo);
-                    marketDataSyncService.fetchAndPersist(ticker, safeFrom, safeTo);
-                    return;
-                }
+            log.info("gap check ticker={} minOpt={} maxOpt={}", ticker, minOpt, maxOpt);
 
-                LocalDate min = minOpt.get();
-                LocalDate max = maxOpt.get();
-
-                if (min.isAfter(safeFrom)) {
-                    LocalDate leftTo = TradingUtil.prevTradingDay(min);
-                    log.info("Left gap ticker={} leftFrom={} leftTo={}", ticker, safeFrom, leftTo);
-                    if (!leftTo.isBefore(safeFrom)) {
-                        marketDataSyncService.fetchAndPersist(ticker, safeFrom, leftTo);
-                    }
-                }
-
-                if (max.isBefore(safeTo)) {
-                    LocalDate rightFrom = TradingUtil.nextTradingDay(max);
-                    log.info("Right gap ticker={} rightFrom={} rightTo={}", ticker, rightFrom, safeTo);
-                    if (!rightFrom.isAfter(safeTo)) {
-                        marketDataSyncService.fetchAndPersist(ticker, rightFrom, safeTo);
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Exception inside synchronized block ticker={}", ticker, e);
+            if (minOpt.isEmpty()) {
+                log.info("No data → full fetch ticker={} {} - {}", ticker, safeFrom, safeTo);
+                marketDataSyncService.fetchAndPersist(ticker, safeFrom, safeTo);
+                return;
             }
+
+            LocalDate min = minOpt.get();
+            LocalDate max = maxOpt.get();
+
+            if (min.isAfter(safeFrom)) {
+                LocalDate leftTo = TradingUtil.prevTradingDay(min);
+                log.info("Left gap ticker={} leftFrom={} leftTo={}", ticker, safeFrom, leftTo);
+                if (!leftTo.isBefore(safeFrom)) {
+                    marketDataSyncService.fetchAndPersist(ticker, safeFrom, leftTo);
+                }
+            }
+
+            if (max.isBefore(safeTo)) {
+                LocalDate rightFrom = TradingUtil.nextTradingDay(max);
+                log.info("Right gap ticker={} rightFrom={} rightTo={}", ticker, rightFrom, safeTo);
+                if (!rightFrom.isAfter(safeTo)) {
+                    marketDataSyncService.fetchAndPersist(ticker, rightFrom, safeTo);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Exception during sync ticker={}", ticker, e);
         }
     }
 }

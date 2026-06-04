@@ -48,9 +48,6 @@ public class PriceBar extends BaseEntitySoftDelete {
 
     private Long volume;
 
-    // -------------------------------------------------------------------------
-    // Factory
-    // -------------------------------------------------------------------------
 
     public static PriceBar from(PriceBarDto dto) {
         Objects.requireNonNull(dto, "PriceBarDto must not be null");
@@ -69,11 +66,6 @@ public class PriceBar extends BaseEntitySoftDelete {
         bar.volume = volume;
         return bar;
     }
-
-
-    // -------------------------------------------------------------------------
-    // Domain behaviour
-    // -------------------------------------------------------------------------
 
     /**
      * Computes the daily return against the previous bar's adjClose.
@@ -126,9 +118,6 @@ public class PriceBar extends BaseEntitySoftDelete {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Identity
-    // -------------------------------------------------------------------------
 
     @Override
     public boolean equals(Object o) {

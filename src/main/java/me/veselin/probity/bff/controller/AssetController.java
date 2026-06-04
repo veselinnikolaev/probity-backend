@@ -5,7 +5,6 @@ import me.veselin.probity.bff.security.rate_limit.RateLimit;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.portfolio.dto.AssetSearchResultDto;
 import me.veselin.probity.portfolio.port.asset.AssetQueryPort;
-import me.veselin.probity.portfolio.service.asset.AssetQueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -21,8 +20,12 @@ public class AssetController {
 
     /**
      * GET /api/v1/assets/search?q=AAPL
+     * Searches for assets by ticker or name.
      * Phase 1: local Asset table (instant)
      * Phase 2: Yahoo Finance probe if ticker not in DB (handles unknown tickers)
+     *
+     * @param q search query (ticker or name)
+     * @return list of matching asset DTOs
      */
     @GetMapping(ApiRoutes.Assets.SEARCH)
     @RateLimit(requests = 30, seconds = 60)

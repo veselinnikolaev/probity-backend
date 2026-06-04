@@ -1,5 +1,6 @@
 package me.veselin.probity.risk.service;
 
+import me.veselin.probity.common.config.TradingConfiguration;
 import me.veselin.probity.risk.dto.DistributionStatistics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,7 +40,7 @@ class RiskCalculatorDistributionTest {
 
     @BeforeEach
     void setUp() {
-        calculator = new RiskCalculator();
+        calculator = new RiskCalculator(new TradingConfiguration());
     }
 
     // ── distributionStatistics ───────────────────────────────────────────────

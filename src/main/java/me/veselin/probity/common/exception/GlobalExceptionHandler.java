@@ -5,6 +5,7 @@ import me.veselin.probity.auth.exception.UnauthorizedException;
 import me.veselin.probity.marketdata.exception.MarketDataException;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
 import me.veselin.probity.portfolio.exception.PositionNotFoundException;
+import me.veselin.probity.simulation.exception.EmptyPortfolioException;
 import me.veselin.probity.simulation.exception.SimulationNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -53,6 +54,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(Map.of(
                 "status", 400,
                 "error", "Invalid request input",
+                "path", HtmlUtils.htmlEscape(request.getRequestURI()),
+                "timestamp", Instant.now()
+        ));
+    }
+
+    @ExceptionHandler(EmptyPortfolioException.class)
+    public ResponseEntity<?> handleEmptyPortfolio(EmptyPortfolioException ex,
+                                                  HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(Map.of(
+                "status", 400,
+                "error", ex.getMessage(),
                 "path", HtmlUtils.htmlEscape(request.getRequestURI()),
                 "timestamp", Instant.now()
         ));

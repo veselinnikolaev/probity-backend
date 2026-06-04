@@ -49,9 +49,6 @@ public class Portfolio extends BaseEntitySoftDelete {
     )
     private final List<PortfolioPosition> positions = new ArrayList<>();
 
-    // -------------------------------------------------------------------------
-    // Factory
-    // -------------------------------------------------------------------------
 
     public static Portfolio create(String name, UUID userId) {
         Objects.requireNonNull(name, "name must not be null");
@@ -64,9 +61,6 @@ public class Portfolio extends BaseEntitySoftDelete {
         return p;
     }
 
-    // -------------------------------------------------------------------------
-    // Domain behaviour
-    // -------------------------------------------------------------------------
 
     public PortfolioPosition addPosition(Asset asset, BigDecimal quantity, BigDecimal price) {
         Objects.requireNonNull(asset, "asset must not be null");
@@ -140,17 +134,11 @@ public class Portfolio extends BaseEntitySoftDelete {
         super.softDelete();
     }
 
-    // -------------------------------------------------------------------------
-    // Queries
-    // -------------------------------------------------------------------------
 
     public List<PortfolioPosition> getPositions() {
         return Collections.unmodifiableList(positions);
     }
 
-    // -------------------------------------------------------------------------
-    // Internal helpers
-    // -------------------------------------------------------------------------
 
     private PortfolioPosition findActivePosition(Asset asset) {
         return positions.stream()
@@ -169,9 +157,6 @@ public class Portfolio extends BaseEntitySoftDelete {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Identity
-    // -------------------------------------------------------------------------
 
     @Override
     public boolean equals(Object o) {

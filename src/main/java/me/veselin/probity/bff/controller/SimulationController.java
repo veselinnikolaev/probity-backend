@@ -37,7 +37,7 @@ public class SimulationController {
             @AuthenticationPrincipal UserPrincipal principal,
             UriComponentsBuilder ucb) {
 
-        SimulationResultDto result = simulationPort.run(request, principal.id());
+        SimulationResultDto result = simulationPort.runSimulation(request, principal.id());
 
         URI location = ucb.path(ApiRoutes.Simulations.SIMULATION)
                 .buildAndExpand(result.id())
@@ -55,7 +55,7 @@ public class SimulationController {
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        return ResponseEntity.ok(simulationPort.get(id, principal.id()));
+        return ResponseEntity.ok(simulationPort.getSimulation(id, principal.id()));
     }
 
     /**
@@ -67,6 +67,6 @@ public class SimulationController {
             @RequestParam UUID portfolioId,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        return ResponseEntity.ok(simulationPort.listForPortfolio(portfolioId, principal.id()));
+        return ResponseEntity.ok(simulationPort.listSimulations(portfolioId, principal.id()));
     }
 }

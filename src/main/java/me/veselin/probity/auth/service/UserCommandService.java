@@ -30,16 +30,19 @@ public class UserCommandService implements AuthCommandPort {
 
     /**
      * Authenticates a user and issues a fresh access/refresh token pair.
-     * Uses a constant-time password path to reduce username-enumeration signals.
+     * Uses constant-time password verification to prevent username-enumeration timing attacks.
+     * Always performs bcrypt comparison regardless of user existence to maintain uniform execution time.
      */
     public AuthResult login(LoginCommand request) {
         User user = userRepository.findByUsernameOrEmail(request.identifier(), request.identifier())
                 .orElse(null);
 
-        // always run bcrypt even if user not found — prevents timing attacks
+        // Constant-time verification: always run bcrypt even if user not found
+        // This prevents timing attacks that could reveal whether a username exists
         String hashToCheck = user != null ? user.getPassword() : "$2a$10$dummyhashtopreventtimingattack00000000000000000000000";
+        boolean passwordMatches = passwordEncoder.matches(request.password(), hashToCheck);
 
-        if (user == null || !passwordEncoder.matches(request.password(), hashToCheck)) {
+        if (user == null || !passwordMatches) {
             throw new BadCredentialsException("Invalid credentials");
         }
 

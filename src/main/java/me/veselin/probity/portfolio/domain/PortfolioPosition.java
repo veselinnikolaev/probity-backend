@@ -48,9 +48,6 @@ public class PortfolioPosition extends BaseEntitySoftDelete {
     @Column(name = "avg_buy_price", precision = 19, scale = 4)
     private BigDecimal avgBuyPrice;
 
-    // -------------------------------------------------------------------------
-    // Package-private constructor — called only by Portfolio aggregate root
-    // -------------------------------------------------------------------------
 
     PortfolioPosition(Portfolio portfolio, Asset asset, BigDecimal quantity, BigDecimal price) {
         this.portfolio = portfolio;
@@ -59,9 +56,6 @@ public class PortfolioPosition extends BaseEntitySoftDelete {
         this.avgBuyPrice = price;
     }
 
-    // -------------------------------------------------------------------------
-    // Domain behaviour — package-private, invoked only by Portfolio
-    // -------------------------------------------------------------------------
 
     void adjustQuantity(BigDecimal delta, BigDecimal price) {
         BigDecimal newQty = this.quantity.add(delta);
@@ -78,9 +72,6 @@ public class PortfolioPosition extends BaseEntitySoftDelete {
         this.quantity = validateQuantity(newQty);
     }
 
-    // -------------------------------------------------------------------------
-    // Internal helpers
-    // -------------------------------------------------------------------------
 
     private static BigDecimal validateQuantity(BigDecimal quantity) {
         Objects.requireNonNull(quantity, "quantity must not be null");
@@ -91,9 +82,6 @@ public class PortfolioPosition extends BaseEntitySoftDelete {
         return quantity;
     }
 
-    // -------------------------------------------------------------------------
-    // Identity
-    // -------------------------------------------------------------------------
 
     @Override
     public boolean equals(Object o) {

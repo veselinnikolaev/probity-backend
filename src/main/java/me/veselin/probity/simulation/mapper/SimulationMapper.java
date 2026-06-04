@@ -5,15 +5,19 @@ import me.veselin.probity.simulation.domain.SimulationPayload;
 import me.veselin.probity.bff.dto.simulation.SimulationResultDto;
 import org.springframework.stereotype.Component;
 
+import java.time.format.DateTimeFormatter;
+
 @Component
 public class SimulationMapper {
+
+    private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT;
 
     public SimulationResultDto toDto(Simulation simulation) {
         SimulationPayload p = simulation.getResultPayload();
 
-        // BaseEntitySoftDelete.createdAt is LocalDateTime — format as ISO string
+        // BaseEntity.createdAt is Instant — format as ISO-8601 UTC string
         String createdAt = simulation.getCreatedAt() != null
-                ? simulation.getCreatedAt().toString()
+                ? ISO_FORMATTER.format(simulation.getCreatedAt())
                 : null;
 
         return new SimulationResultDto(

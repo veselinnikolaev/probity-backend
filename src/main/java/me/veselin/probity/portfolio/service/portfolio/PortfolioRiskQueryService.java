@@ -3,7 +3,7 @@ package me.veselin.probity.portfolio.service.portfolio;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.common.util.DataUtil;
-import me.veselin.probity.common.util.TradingUtil;
+import me.veselin.probity.common.util.DateRangeUtil;
 import me.veselin.probity.marketdata.domain.PriceBar;
 import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.portfolio.domain.Portfolio;
@@ -57,10 +57,8 @@ public class PortfolioRiskQueryService implements PortfolioRiskQueryPort {
         List<PortfolioPosition> positions = portfolio.getPositions();
         if (positions.isEmpty()) return RiskMetricsDto.empty();
 
-        LocalDate to = TradingUtil.lastCompletedTradingDay();
-        LocalDate from = DateRange.fromValue(range).toStartDate(to);
-
-        PortfolioTimeSeries ts = portfolioDataHelper.buildTimeSeries(positions, from, to);
+        DateRangeUtil.DateRangeResult dateRange = DateRangeUtil.calculateRangeFromDateRangeEnum(DateRange.fromValue(range));
+        PortfolioTimeSeries ts = portfolioDataHelper.buildTimeSeries(positions, dateRange.from(), dateRange.to());
         if (ts.isEmpty()) return RiskMetricsDto.empty();
 
         List<Double> values = ts.values();
@@ -112,37 +110,72 @@ public class PortfolioRiskQueryService implements PortfolioRiskQueryPort {
         List<PortfolioPosition> positions = portfolio.getPositions();
         if (positions.isEmpty()) return VaRReportDto.empty(confidenceLevel, timeHorizonDays);
 
-        LocalDate to = TradingUtil.lastCompletedTradingDay();
-        LocalDate from = to.minusDays(VAR_LOOKBACK_DAYS); // enough history for distribution + sparkline
-
-        PortfolioTimeSeries ts = portfolioDataHelper.buildTimeSeries(positions, from, to);
+        DateRangeUtil.DateRangeResult dateRange = DateRangeUtil.calculateHistoricalRange(VAR_LOOKBACK_DAYS);
+        PortfolioTimeSeries ts = portfolioDataHelper.buildTimeSeries(positions, dateRange.from(), dateRange.to());
         if (ts.isEmpty()) return VaRReportDto.empty(confidenceLevel, timeHorizonDays);
 
+        VaRContext context = calculateVaRMetrics(ts, confidenceLevel, timeHorizonDays);
+        List<VaRReportDto.AssetVaRDto> assetBreakdown = buildAssetBreakdown(positions, ts, context, timeHorizonDays);
+        List<Double> spark = generateSparklines(ts.values(), context.valueAtRisk());
+        List<VaRReportDto.ReturnBucketDto> distribution = buildDistribution(ts.returns());
+
+        VaRReportDto.MethodologyDto methodology = new VaRReportDto.MethodologyDto(
+                "VaR = μ + Z × σ",
+                context.vol() * 100,
+                context.z(),
+                context.meanDailyReturn() * 100
+        );
+
+        return new VaRReportDto(
+                context.valueAtRisk(),
+                confidenceLevel,
+                timeHorizonDays,
+                methodology,
+                spark,
+                assetBreakdown,
+                distribution
+        );
+    }
+
+    /**
+     * Calculates portfolio-level VaR metrics from time series data.
+     */
+    private VaRContext calculateVaRMetrics(PortfolioTimeSeries ts, double confidenceLevel, int timeHorizonDays) {
         List<Double> portfolioValues = ts.values();
         List<Double> dailyReturns = ts.returns();
 
         double currentValue = DataUtil.lastOrZero(portfolioValues);
         double vol = riskPort.annualisedVolatility(dailyReturns);
 
-        // Z-score lookup based on confidence level
-        double z = switch ((int) Math.round(confidenceLevel * 100)) {
-            case 90 -> 1.282; // 90% confidence z-score
-            case 99 -> 2.326; // 99% confidence z-score
-            default -> 1.645; // 95% confidence z-score (default)
-        };
-
-        // Daily vol from annualised — σ_daily = σ_annual / √252
+        double z = getZScore(confidenceLevel);
         double dailyVol = vol / Math.sqrt(PortfolioDataHelper.TRADING_DAYS);
-        // Scale to horizon: σ_T = σ_daily × √T
         double horizonVol = dailyVol * Math.sqrt(timeHorizonDays);
         double meanDailyReturn = dailyReturns.stream()
                 .mapToDouble(Double::doubleValue).average().orElse(0.0);
 
-        // Parametric VaR (negative = loss)
         double varPct = meanDailyReturn - z * horizonVol;
         double valueAtRisk = varPct * currentValue;
 
-        // ── Per-asset breakdown ───────────────────────────────────────────────
+        return new VaRContext(currentValue, vol, z, dailyVol, horizonVol, meanDailyReturn, valueAtRisk);
+    }
+
+    /**
+     * Returns the Z-score for a given confidence level.
+     */
+    private double getZScore(double confidenceLevel) {
+        return switch ((int) Math.round(confidenceLevel * 100)) {
+            case 90 -> 1.282; // 90% confidence z-score
+            case 99 -> 2.326; // 99% confidence z-score
+            default -> 1.645; // 95% confidence z-score (default)
+        };
+    }
+
+    /**
+     * Builds per-asset VaR breakdown with contributions.
+     */
+    private List<VaRReportDto.AssetVaRDto> buildAssetBreakdown(
+            List<PortfolioPosition> positions, PortfolioTimeSeries ts, VaRContext context, int timeHorizonDays) {
+
         Map<String, Double> latestPrices = ts.barsByTicker().entrySet().stream()
                 .filter(e -> !e.getValue().isEmpty())
                 .collect(Collectors.toMap(
@@ -167,27 +200,28 @@ public class PortfolioRiskQueryService implements PortfolioRiskQueryPort {
             double assetDailyVol = assetVol / Math.sqrt(PortfolioDataHelper.TRADING_DAYS);
             double assetHorizonVol = assetDailyVol * Math.sqrt(timeHorizonDays);
             double assetMean = assetReturns.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
-            double assetVarPct = assetMean - z * assetHorizonVol;
+            double assetVarPct = assetMean - context.z() * assetHorizonVol;
             double individualVar = assetVarPct * posValue;
-
-            // Contribution = weight-scaled share of portfolio VaR
-            double contribution = (weight / 100.0) * valueAtRisk;
+            double contribution = (weight / 100.0) * context.valueAtRisk();
 
             return new VaRReportDto.AssetVaRDto(ticker, weight, individualVar, contribution, 0.0);
         }).toList();
 
-        // Back-fill percentOfTotal now that we have all contributions
+        // Back-fill percentOfTotal
         double totalContribution = assetBreakdown.stream()
                 .mapToDouble(a -> Math.abs(a.contribution())).sum();
 
-        List<VaRReportDto.AssetVaRDto> assetBreakdownWithPct = assetBreakdown.stream()
+        return assetBreakdown.stream()
                 .map(a -> new VaRReportDto.AssetVaRDto(
                         a.ticker(), a.weight(), a.individualVar(), a.contribution(),
-                        totalContribution > 0
-                                ? (Math.abs(a.contribution()) / totalContribution) * 100 : 0.0
+                        totalContribution > 0 ? (Math.abs(a.contribution()) / totalContribution) * 100 : 0.0
                 )).toList();
+    }
 
-        // ── Historical sparkline — rolling VaR ────────────────────────────────
+    /**
+     * Generates historical VaR sparkline using rolling window calculations.
+     */
+    private List<Double> generateSparklines(List<Double> portfolioValues, double valueAtRisk) {
         List<Double> spark = new ArrayList<>();
         int sparkPoints = Math.min(VAR_SPARKLINE_DAYS, portfolioValues.size());
         int startIdx = portfolioValues.size() - sparkPoints;
@@ -199,11 +233,7 @@ public class PortfolioRiskQueryService implements PortfolioRiskQueryPort {
                 continue;
             }
             List<Double> windowValues = portfolioValues.subList(windowStart, i + 1);
-            List<Double> windowReturns = new ArrayList<>();
-            for (int j = 1; j < windowValues.size(); j++) {
-                double prev = windowValues.get(j - 1);
-                if (prev != 0) windowReturns.add((windowValues.get(j) - prev) / prev);
-            }
+            List<Double> windowReturns = calculateWindowReturns(windowValues);
             if (windowReturns.size() < 2) {
                 spark.add(Math.abs(valueAtRisk));
                 continue;
@@ -211,8 +241,25 @@ public class PortfolioRiskQueryService implements PortfolioRiskQueryPort {
             double windowVar = riskPort.var95(portfolioValues.get(i), windowReturns);
             spark.add(Math.abs(windowVar));
         }
+        return spark;
+    }
 
-        // ── Return distribution — bucket daily returns into bins ──────────────
+    /**
+     * Calculates returns from a window of values.
+     */
+    private List<Double> calculateWindowReturns(List<Double> windowValues) {
+        List<Double> windowReturns = new ArrayList<>();
+        for (int j = 1; j < windowValues.size(); j++) {
+            double prev = windowValues.get(j - 1);
+            if (prev != 0) windowReturns.add((windowValues.get(j) - prev) / prev);
+        }
+        return windowReturns;
+    }
+
+    /**
+     * Builds return distribution histogram from daily returns.
+     */
+    private List<VaRReportDto.ReturnBucketDto> buildDistribution(List<Double> dailyReturns) {
         double[] breakpoints = {-0.10, -0.08, -0.06, -0.04, -0.02, 0.00, 0.02, 0.04, 0.06, 0.08, 0.10};
         String[] labels = {
                 "-10% to -8%", "-8% to -6%", "-6% to -4%", "-4% to -2%", "-2% to 0%",
@@ -234,24 +281,21 @@ public class PortfolioRiskQueryService implements PortfolioRiskQueryPort {
             boolean isNegativeReturn = i < (labels.length / 2);
             distribution.add(new VaRReportDto.ReturnBucketDto(labels[i], counts[i], isNegativeReturn));
         }
-
-        VaRReportDto.MethodologyDto methodology = new VaRReportDto.MethodologyDto(
-                "VaR = μ + Z × σ",
-                vol * 100,
-                z,
-                meanDailyReturn * 100
-        );
-
-        return new VaRReportDto(
-                valueAtRisk,
-                confidenceLevel,
-                timeHorizonDays,
-                methodology,
-                spark,
-                assetBreakdownWithPct,
-                distribution
-        );
+        return distribution;
     }
+
+    /**
+     * Value object holding VaR calculation context.
+     */
+    private record VaRContext(
+            double currentValue,
+            double vol,
+            double z,
+            double dailyVol,
+            double horizonVol,
+            double meanDailyReturn,
+            double valueAtRisk
+    ) {}
 
     // ── Correlation matrix ────────────────────────────────────────────────────
 
@@ -270,8 +314,7 @@ public class PortfolioRiskQueryService implements PortfolioRiskQueryPort {
             return new CorrelationMatrixDto(tickers, List.of(List.of(1.0)));
         }
 
-        LocalDate to = TradingUtil.lastCompletedTradingDay();
-        LocalDate from = DateRange.fromValue(range).toStartDate(to);
+        DateRangeUtil.DateRangeResult dateRange = DateRangeUtil.calculateRangeFromDateRangeEnum(DateRange.fromValue(range));
 
         List<String> tickers = positions.stream()
                 .map(p -> p.getAsset().getTicker())
@@ -282,7 +325,7 @@ public class PortfolioRiskQueryService implements PortfolioRiskQueryPort {
                 .collect(Collectors.toMap(
                         ticker -> ticker,
                         ticker -> DataUtil.toReturnsFromBars(
-                                marketDataPort.getHistoricalBars(ticker, from, to))
+                                marketDataPort.getHistoricalBars(ticker, dateRange.from(), dateRange.to()))
                 ));
 
         List<List<Double>> matrix = new ArrayList<>();
@@ -310,10 +353,8 @@ public class PortfolioRiskQueryService implements PortfolioRiskQueryPort {
         Portfolio portfolio = portfolioQueryService.loadPortfolioWithPositions(id, principalId);
         List<PortfolioPosition> positions = portfolio.getPositions();
 
-        LocalDate to = TradingUtil.lastCompletedTradingDay();
-        LocalDate from = DateRange.fromValue(range).toStartDate(to);
-
-        PortfolioTimeSeries ts = portfolioDataHelper.buildTimeSeries(positions, from, to);
+        DateRangeUtil.DateRangeResult dateRange = DateRangeUtil.calculateRangeFromDateRangeEnum(DateRange.fromValue(range));
+        PortfolioTimeSeries ts = portfolioDataHelper.buildTimeSeries(positions, dateRange.from(), dateRange.to());
 
         List<Double> values = ts.values();
         List<LocalDate> dates = ts.dates();

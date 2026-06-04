@@ -20,6 +20,16 @@ public final class ApiRoutes {
         public static final String CSRF = ROOT + "/csrf";
     }
 
+    public static final class Users {
+        private Users() {}
+
+        public static final String ME            = V1 + "/users/me";
+        public static final String PASSWORD      = ME + "/password";
+        public static final String PREFERENCES   = ME + "/preferences";
+        public static final String SESSIONS      = ME + "/sessions";
+        public static final String SESSION       = SESSIONS + "/{sessionId}";
+    }
+
     public static final class Portfolios {
         private Portfolios() {
         }

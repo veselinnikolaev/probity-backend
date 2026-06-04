@@ -28,7 +28,7 @@ import java.util.Objects;
         indexes = @Index(name = "idx_users_email", columnList = "email")
 )
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED) // JPA requirement only
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLRestriction("deleted = false")
 public class User extends BaseEntitySoftDelete implements Serializable {
 
@@ -41,14 +41,17 @@ public class User extends BaseEntitySoftDelete implements Serializable {
     @Column(nullable = false)
     private String password;
 
+    @Column(name = "first_name", length = 100)
+    private String firstName;
+
+    @Column(name = "last_name", length = 100)
+    private String lastName;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false)
     private Role role;
 
-    // -------------------------------------------------------------------------
-    // Factory
-    // -------------------------------------------------------------------------
 
     public static User create(String username, String email, String hashedPassword) {
         Objects.requireNonNull(username, "username must not be null");
@@ -63,9 +66,6 @@ public class User extends BaseEntitySoftDelete implements Serializable {
         return user;
     }
 
-    // -------------------------------------------------------------------------
-    // Domain behaviour
-    // -------------------------------------------------------------------------
 
     public void changePassword(String newHashedPassword) {
         this.password = Objects.requireNonNull(newHashedPassword, "hashedPassword must not be null");
@@ -75,13 +75,15 @@ public class User extends BaseEntitySoftDelete implements Serializable {
         this.username = username != null ? username.trim() : null;
     }
 
+    public void updateProfile(String firstName, String lastName) {
+        this.firstName = firstName != null ? firstName.trim() : null;
+        this.lastName = lastName != null ? lastName.trim() : null;
+    }
+
     public void promoteToAdmin() {
         this.role = Role.ADMIN;
     }
 
-    // -------------------------------------------------------------------------
-    // Identity
-    // -------------------------------------------------------------------------
 
     @Override
     public boolean equals(Object o) {
@@ -97,7 +99,6 @@ public class User extends BaseEntitySoftDelete implements Serializable {
 
     @Override
     public String toString() {
-        // Deliberately excludes email for privacy in logs
-        return "User{id=%s, role=%s}".formatted(getId(), role);
+        return "User{id=%s, firstName=%s, lastName=%s, role=%s}".formatted(getId(), firstName, lastName, role);
     }
 }

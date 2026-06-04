@@ -34,6 +34,14 @@ public class AuthController {
     private final CookieService cookieService;
     private final CsrfTokenRepository csrfTokenRepository;
 
+    /**
+     * GET /auth/csrf
+     * Fetches or generates a CSRF token for the session.
+     *
+     * @param request HTTP request
+     * @param response HTTP response
+     * @return empty response with X-XSRF-TOKEN header
+     */
     @GetMapping(ApiRoutes.Auth.CSRF)
     public ResponseEntity<Void> csrf(HttpServletRequest request, HttpServletResponse response) {
         CsrfToken token = csrfTokenRepository.loadToken(request);
@@ -45,6 +53,14 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * POST /auth/register
+     * Registers a new user account.
+     *
+     * @param request registration request with username, email, and password
+     * @return 201 CREATED on success
+     * @throws me.veselin.probity.common.exception.ConflictException if username or email already exists
+     */
     @PostMapping(ApiRoutes.Auth.REGISTER)
     @RateLimit(requests = 3, seconds = 60)
     public ResponseEntity<Void> register(@Valid @RequestBody RegisterRequest request) {
@@ -54,6 +70,15 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
+    /**
+     * POST /auth/login
+     * Authenticates a user and issues JWT tokens.
+     *
+     * @param request login request with identifier (username or email) and password
+     * @param response HTTP response for setting auth cookies
+     * @return auth response with username and role
+     * @throws me.veselin.probity.auth.exception.UnauthorizedException if credentials are invalid
+     */
     @PostMapping(ApiRoutes.Auth.LOGIN)
     @RateLimit(requests = 5, seconds = 60)
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
@@ -70,6 +95,15 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponse(result.username(), result.role()));
     }
 
+    /**
+     * POST /auth/refresh
+     * Refreshes access token using a valid refresh token.
+     *
+     * @param refreshToken refresh token from cookie
+     * @param response HTTP response for setting new auth cookies
+     * @return auth response with username and role
+     * @throws me.veselin.probity.auth.exception.UnauthorizedException if refresh token is invalid or missing
+     */
     @PostMapping(ApiRoutes.Auth.REFRESH)
     public ResponseEntity<AuthResponse> refresh(@CookieValue(value = "refresh_token", required = false) String refreshToken,
                                                 HttpServletResponse response) {
@@ -87,6 +121,15 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponse(result.username(), result.role()));
     }
 
+    /**
+     * POST /auth/logout
+     * Logs out the user by invalidating tokens and clearing cookies.
+     *
+     * @param refreshToken refresh token from cookie (optional)
+     * @param accessToken access token from cookie (optional)
+     * @param response HTTP response for clearing auth cookies
+     * @return 204 NO CONTENT
+     */
     @PostMapping(ApiRoutes.Auth.LOGOUT)
     public ResponseEntity<Void> logout(
             @CookieValue(value = "refresh_token", required = false) String refreshToken,

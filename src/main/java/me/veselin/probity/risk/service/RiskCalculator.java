@@ -1,5 +1,8 @@
 package me.veselin.probity.risk.service;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import me.veselin.probity.common.config.TradingConfiguration;
 import me.veselin.probity.common.util.DataUtil;
 import me.veselin.probity.marketdata.domain.PriceBar;
 import me.veselin.probity.portfolio.domain.PortfolioPosition;
@@ -15,25 +18,43 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Shared kernel component providing financial risk calculations.
+ *
+ * This service implements the RiskPort interface and is used across multiple
+ * bounded contexts (portfolio, simulation). It provides pure mathematical
+ * risk calculations that are domain-agnostic, making it suitable as a shared
+ * kernel component.
+ *
+ * <p><strong>Architecture Note:</strong> This is intentionally placed in the
+ * risk package as a shared kernel because:
+ * <ul>
+ *   <li>Risk calculations are mathematical operations with no domain-specific business rules</li>
+ *   <li>Both portfolio and simulation contexts require identical risk metric calculations</li>
+ *   <li>Duplicating these calculations would violate DRY and introduce inconsistency risks</li>
+ * </ul>
+ *
+ * <p><strong>Coupling Considerations:</strong> Some methods (e.g., computeHHI, riskScore) have
+ * dependencies on portfolio domain types (PortfolioPosition, AssetType). These represent
+ * acceptable coupling since the calculations are inherently portfolio-specific. Pure
+ * mathematical methods (volatility, Sharpe, VaR, correlation) are fully domain-agnostic.
+ */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class RiskCalculator implements RiskPort {
 
     @Value("${probity.risk.risk-free-rate:0.045}")
     private double riskFreeRate;
 
-    // Risk calculation constants
-    private static final double TRADING_DAYS = 252.0;
-    private static final double Z_95 = 1.645; // 95% confidence level z-score
-    private static final int VOLATILITY_THRESHOLD = 15; // Volatility threshold for risk score addon (%)
-    private static final int VOL_ADDON_FACTOR = 10; // Volatility band width for risk score calculation
-    private static final int RISK_SCORE_INCREMENT = 5; // Points added per volatility band
+    private final TradingConfiguration tradingConfig;
 
     @Override
     public double annualisedVolatility(List<Double> dailyReturns) {
         if (dailyReturns.size() < 2) return 0.0;
         double mean = DataUtil.mean(dailyReturns);
         double variance = DataUtil.variance(dailyReturns, mean);
-        return Math.sqrt(variance) * Math.sqrt(TRADING_DAYS) * 100;
+        return Math.sqrt(variance) * Math.sqrt(tradingConfig.getTradingDaysPerYear()) * 100;
     }
 
     @Override
@@ -41,9 +62,13 @@ public class RiskCalculator implements RiskPort {
         if (dailyReturns.size() < 2) return 0.0;
         double mean = DataUtil.mean(dailyReturns);
         double stdDev = Math.sqrt(DataUtil.variance(dailyReturns, mean));
-        if (stdDev == 0) return 0.0;
-        double riskFreeDaily = riskFreeRate / TRADING_DAYS;
-        return ((mean - riskFreeDaily) / stdDev) * Math.sqrt(TRADING_DAYS);
+        if (stdDev == 0) {
+            log.warn("Zero standard deviation detected in Sharpe ratio calculation - returns may be constant");
+            return 0.0;
+        }
+        double tradingDays = tradingConfig.getTradingDaysPerYear();
+        double riskFreeDaily = riskFreeRate / tradingDays;
+        return ((mean - riskFreeDaily) / stdDev) * Math.sqrt(tradingDays);
     }
 
     @Override
@@ -51,7 +76,7 @@ public class RiskCalculator implements RiskPort {
         if (dailyReturns.size() < 2) return 0.0;
         double mean = DataUtil.mean(dailyReturns);
         double stdDev = Math.sqrt(DataUtil.variance(dailyReturns, mean));
-        return portfolioValue * Z_95 * stdDev;
+        return portfolioValue * tradingConfig.getZScore95() * stdDev;
     }
 
     @Override
@@ -80,9 +105,9 @@ public class RiskCalculator implements RiskPort {
     @Override
     public int riskScore(String assetType, double annualisedVol) {
         int base = AssetType.valueOf(assetType.toUpperCase()).getBaseRiskScore();
-        int volAddon = annualisedVol <= VOLATILITY_THRESHOLD
+        int volAddon = annualisedVol <= tradingConfig.getVolatilityThreshold()
                 ? 0
-                : (int) ((annualisedVol - VOLATILITY_THRESHOLD) / VOL_ADDON_FACTOR * RISK_SCORE_INCREMENT);
+                : (int) ((annualisedVol - tradingConfig.getVolatilityThreshold()) / tradingConfig.getVolatilityAddonFactor() * tradingConfig.getRiskScoreIncrement());
         return Math.min(100, base + volAddon);
     }
 
@@ -131,6 +156,42 @@ public class RiskCalculator implements RiskPort {
                 .sum();
     }
 
+    /**
+     * Calculates the Pearson correlation coefficient between two return series.
+     *
+     * <h2>Mathematical Formulation</h2>
+     * The Pearson correlation coefficient (ρ) measures the linear relationship between two variables:
+     * <pre>
+     * ρ(X,Y) = Cov(X,Y) / (σ_X * σ_Y)
+     * </pre>
+     * Where:
+     * <ul>
+     *   <li>Cov(X,Y) = Σ((x_i - μ_X)(y_i - μ_Y)) / (n-1) is the covariance</li>
+     *   <li>σ_X, σ_Y are the standard deviations of X and Y</li>
+     *   <li>μ_X, μ_Y are the means of X and Y</li>
+     *   <li>n is the number of paired observations</li>
+     * </ul>
+     *
+     * <h2>Financial Implications for Portfolio Diversification</h2>
+     * <ul>
+     *   <li>ρ = 1.0: Perfect positive correlation (assets move together) - no diversification benefit</li>
+     *   <li>ρ = 0.0: No linear correlation (assets move independently) - partial diversification benefit</li>
+     *   <li>ρ = -1.0: Perfect negative correlation (assets move oppositely) - maximum diversification benefit</li>
+     *   <li>Typical equity correlations range from 0.3 to 0.9 in normal market conditions</li>
+     *   <li>Correlations tend to increase toward 1.0 during market stress (correlation breakdown)</li>
+     * </ul>
+     *
+     * <h2>Edge Case Handling</h2>
+     * <ul>
+     *   <li>Insufficient data (n < 2): Returns 0.0 (no correlation can be computed)</li>
+     *   <li>Zero variance (constant returns): Returns 0.0 (undefined mathematically, treated as no correlation)</li>
+     *   <li>Mismatched list lengths: Uses the shorter length (truncates excess data)</li>
+     * </ul>
+     *
+     * @param x First return series (e.g., daily returns of asset A)
+     * @param y Second return series (e.g., daily returns of asset B)
+     * @return Pearson correlation coefficient in range [-1.0, 1.0], or 0.0 if undefined
+     */
     @Override
     public double pearsonCorrelation(List<Double> x, List<Double> y) {
         int n = Math.min(x.size(), y.size());

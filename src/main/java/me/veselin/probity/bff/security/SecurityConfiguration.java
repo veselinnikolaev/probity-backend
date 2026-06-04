@@ -1,5 +1,6 @@
 package me.veselin.probity.bff.security;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.common.util.ApiRoutes;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,8 +31,21 @@ public class SecurityConfiguration {
     @Value("${probity.cors.allowed-origins}")
     private String allowedOrigins;
 
+    @Value("${probity.jwt.secret}")
+    private String jwtSecret;
+
     private final JwtAuthenticationFilter jwtFilter;
     private final AuthenticationEntryPoint authenticationEntryPoint;
+
+    @PostConstruct
+    public void validateConfiguration() {
+        if (jwtSecret == null || jwtSecret.isBlank()) {
+            throw new IllegalStateException(
+                "JWT secret must be configured via JWT_SECRET environment variable. " +
+                "Application cannot start without a valid JWT secret for security reasons."
+            );
+        }
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {

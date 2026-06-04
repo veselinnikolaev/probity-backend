@@ -28,6 +28,15 @@ public class PortfolioCommandController {
 
     private final PortfolioCommandPort portfolioCommandPort;
 
+    /**
+     * POST /portfolios
+     * Creates a new portfolio for the authenticated user.
+     *
+     * @param request portfolio creation request with name
+     * @param userPrincipal authenticated user principal
+     * @param ucb URI components builder for Location header
+     * @return 201 CREATED with portfolio DTO and Location header
+     */
     @PostMapping(ApiRoutes.Portfolios.PORTFOLIOS)
     public ResponseEntity<PortfolioCreatedDto> create(@RequestBody PortfolioCreateRequest request,
                                                       @AuthenticationPrincipal UserPrincipal userPrincipal,
@@ -42,6 +51,18 @@ public class PortfolioCommandController {
         return ResponseEntity.created(location).body(created);
     }
 
+    /**
+     * POST /portfolios/{id}/positions
+     * Adds a new position to the portfolio.
+     *
+     * @param id portfolio UUID
+     * @param request position creation request with asset ID, quantity, and price
+     * @param principal authenticated user principal
+     * @param ucb URI components builder for Location header
+     * @return 201 CREATED with position DTO and Location header
+     * @throws me.veselin.probity.portfolio.exception.PortfolioNotFoundException if portfolio not found
+     * @throws me.veselin.probity.portfolio.exception.AssetNotFoundException if asset not found
+     */
     @PostMapping(ApiRoutes.Portfolios.POSITIONS)
     public ResponseEntity<PositionCreatedDto> addPosition(
             @PathVariable UUID id,
@@ -58,6 +79,18 @@ public class PortfolioCommandController {
         return ResponseEntity.created(location).body(created);
     }
 
+    /**
+     * PUT /portfolios/{id}/positions/{positionId}
+     * Updates the quantity of an existing position.
+     *
+     * @param id portfolio UUID
+     * @param positionId position UUID
+     * @param request position update request with new quantity
+     * @param principal authenticated user principal
+     * @return 204 NO CONTENT
+     * @throws me.veselin.probity.portfolio.exception.PortfolioNotFoundException if portfolio not found
+     * @throws me.veselin.probity.portfolio.exception.PositionNotFoundException if position not found
+     */
     @PutMapping(ApiRoutes.Portfolios.POSITION)
     public ResponseEntity<Void> updatePosition(
             @PathVariable UUID id,
@@ -69,6 +102,17 @@ public class PortfolioCommandController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * DELETE /portfolios/{id}/positions/{positionId}
+     * Deletes a position from the portfolio.
+     *
+     * @param id portfolio UUID
+     * @param positionId position UUID
+     * @param principal authenticated user principal
+     * @return 204 NO CONTENT
+     * @throws me.veselin.probity.portfolio.exception.PortfolioNotFoundException if portfolio not found
+     * @throws me.veselin.probity.portfolio.exception.PositionNotFoundException if position not found
+     */
     @DeleteMapping(ApiRoutes.Portfolios.POSITION)
     public ResponseEntity<Void> deletePosition(
             @PathVariable UUID id,

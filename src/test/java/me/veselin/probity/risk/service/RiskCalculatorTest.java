@@ -1,5 +1,6 @@
 package me.veselin.probity.risk.service;
 
+import me.veselin.probity.common.config.TradingConfiguration;
 import me.veselin.probity.common.util.DataUtil;
 import me.veselin.probity.portfolio.enumeration.AssetType;
 import me.veselin.probity.risk.enumeration.RiskLevel;
@@ -25,7 +26,7 @@ class RiskCalculatorTest {
 
     @BeforeEach
     void setUp() {
-        calculator = new RiskCalculator();
+        calculator = new RiskCalculator(new TradingConfiguration());
         injectRiskFreeRate(calculator, 0.045);
     }
 

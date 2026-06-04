@@ -56,9 +56,6 @@ public class Asset extends BaseEntityWithActive {
     @OneToMany(mappedBy = "asset", fetch = FetchType.LAZY)
     private final List<PortfolioPosition> positions = new ArrayList<>();
 
-    // -------------------------------------------------------------------------
-    // Factory
-    // -------------------------------------------------------------------------
 
     public static Asset create(String ticker, String name, Sector sector, AssetType type) {
         Asset asset = new Asset();
@@ -69,17 +66,11 @@ public class Asset extends BaseEntityWithActive {
         return asset;
     }
 
-    // -------------------------------------------------------------------------
-    // Read-only collection access
-    // -------------------------------------------------------------------------
 
     public List<PortfolioPosition> getPositions() {
         return Collections.unmodifiableList(positions);
     }
 
-    // -------------------------------------------------------------------------
-    // Identity
-    // -------------------------------------------------------------------------
 
     @Override
     public boolean equals(Object o) {

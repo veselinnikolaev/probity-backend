@@ -2,8 +2,9 @@ package me.veselin.probity.simulation.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import me.veselin.probity.common.config.TradingConfiguration;
 import me.veselin.probity.common.util.DataUtil;
-import me.veselin.probity.common.util.TradingUtil;
+import me.veselin.probity.common.util.DateRangeUtil;
 import me.veselin.probity.marketdata.domain.PriceBar;
 import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.portfolio.domain.Portfolio;
@@ -16,7 +17,8 @@ import me.veselin.probity.simulation.domain.SimulationPayload;
 import me.veselin.probity.simulation.domain.SimulationPayload.*;
 import me.veselin.probity.bff.dto.simulation.RunSimulationRequest;
 import me.veselin.probity.bff.dto.simulation.SimulationResultDto;
-import me.veselin.probity.simulation.port.SimulationPort;
+import me.veselin.probity.portfolio.service.portfolio.PortfolioValuationService;
+import me.veselin.probity.simulation.exception.EmptyPortfolioException;
 import me.veselin.probity.simulation.exception.SimulationNotFoundException;
 import me.veselin.probity.simulation.mapper.SimulationMapper;
 import me.veselin.probity.simulation.repository.SimulationRepository;
@@ -26,6 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -35,12 +39,52 @@ import java.util.stream.IntStream;
 @Slf4j
 /**
  * Runs and retrieves Monte Carlo simulations for portfolio scenarios.
+ *
+ * <h2>Geometric Brownian Motion (GBM) Model</h2>
+ * This service implements the GBM stochastic process for simulating portfolio value paths over time.
+ * The GBM model assumes:
+ * <ul>
+ *   <li>Log-normal distribution of asset returns (prices cannot be negative)</li>
+ *   <li>Constant drift parameter μ (expected return)</li>
+ *   <li>Constant volatility parameter σ (standard deviation of returns)</li>
+ *   <li>Independent, normally-distributed increments</li>
+ * </ul>
+ *
+ * <h3>Mathematical Formulation</h3>
+ * The discrete-time GBM equation used for simulation:
+ * <pre>
+ * S(t+Δt) = S(t) * exp((μ - σ²/2)Δt + σ√Δt * Z)
+ * </pre>
+ * Where:
+ * <ul>
+ *   <li>S(t) = portfolio value at time t</li>
+ *   <li>μ = annualized drift (daily return rate)</li>
+ *   <li>σ = annualized volatility (daily standard deviation)</li>
+ *   <li>Δt = time step (1 trading day)</li>
+ *   <li>Z = standard normal random variable</li>
+ * </ul>
+ *
+ * <h3>Random Number Generation</h3>
+ * Normally-distributed random numbers are generated using the Box-Muller transform:
+ * <pre>
+ * Z = √(-2 ln(U₁)) * cos(2πU₂)
+ * </pre>
+ * Where U₁ and U₂ are independent uniform random variables in (0,1).
+ * This method is preferred over inverse transform sampling for its computational efficiency
+ * and numerical stability.
+ *
+ * <h3>Parameter Estimation</h3>
+ * When not provided by the caller, μ and σ are estimated from historical price data:
+ * <ul>
+ *   <li>μ = mean(daily returns) * trading days per year</li>
+ *   <li>σ = std(daily returns) * √(trading days per year)</li>
+ * </ul>
+ * Default lookback period is 90 trading days (~4 months) to balance recency and statistical significance.
  */
-public class MonteCarloSimulationService implements SimulationPort {
+public class MonteCarloSimulationService {
 
     // Historical data parameters
-    private static final int HISTORY_DAYS = 90; // Trading days (~4 months) used to derive μ and σ
-    private static final int TRADING_DAYS = 252; // Standard trading days per year
+    private final TradingConfiguration tradingConfig;
 
     // Percentile bands materialised as path envelopes in the response
     private static final int[] PERCENTILES = {5, 10, 25, 50, 75, 90, 95};
@@ -52,14 +96,13 @@ public class MonteCarloSimulationService implements SimulationPort {
     private static final double THRESHOLD_10PCT_LOSS = 0.90; // Portfolio value threshold for 10% loss scenario
     private static final double THRESHOLD_20PCT_LOSS = 0.80; // Portfolio value threshold for 20% loss scenario
 
-    // Default volatility fallback
-    private static final double DEFAULT_ANNUAL_VOLATILITY = 0.15; // 15% default when insufficient data
-
     private final PortfolioQueryPort portfolioQueryPort;
     private final SimulationRepository simulationRepository;
     private final MarketDataPort marketDataPort;
     private final RiskPort riskPort;
     private final SimulationMapper simulationMapper;
+    private final PortfolioValuationService portfolioValuationService;
+    private final Executor simulationExecutor;
 
     // ── Public API ────────────────────────────────────────────────────────
 
@@ -67,64 +110,123 @@ public class MonteCarloSimulationService implements SimulationPort {
     /**
      * Executes a new simulation run for a user-owned portfolio and persists its payload.
      */
-    @Override
     public SimulationResultDto run(RunSimulationRequest request, UUID userId) {
         log.info("Running Monte Carlo simulation portfolioId={} userId={} paths={} horizon={}d",
                 request.portfolioId(), userId, request.numberOfSimulations(), request.timeHorizonDays());
 
+        SimulationContext context = loadAndValidatePortfolio(request, userId);
+        SimulationParameters params = prepareSimulationParameters(context.positions(), request);
+        SimulationPayload payload = executeSimulationRun(context, params, request);
+
+        Simulation saved = persistResults(request, userId, context.currentValue(), payload, request.numberOfSimulations(), request.timeHorizonDays());
+
+        log.info("Simulation saved id={}", saved.getId());
+        return simulationMapper.toDto(saved);
+    }
+
+    /**
+     * Loads and validates the portfolio for simulation.
+     */
+    private SimulationContext loadAndValidatePortfolio(RunSimulationRequest request, UUID userId) {
         Portfolio portfolio = portfolioQueryPort.loadPortfolioWithPositions(request.portfolioId(), userId);
         List<PortfolioPosition> positions = portfolio.getPositions();
 
         if (positions.isEmpty()) {
-            throw new IllegalArgumentException(
+            throw new EmptyPortfolioException(
                     "Portfolio %s has no positions — cannot run simulation".formatted(request.portfolioId()));
         }
 
-        // ── Derive μ and σ from real market data (or use caller overrides) ──
         BigDecimal currentValue = computeCurrentValue(positions);
-        log.info("computeCurrentValue result={} for {} positions",
-                currentValue, positions.size());
+        log.info("computeCurrentValue result={} for {} positions", currentValue, positions.size());
         if (currentValue.compareTo(BigDecimal.ZERO) == 0) {
             throw new IllegalStateException(
                     "Portfolio value is zero — price fetch failed for all positions. Check ERROR logs above.");
         }
-        double currentValueDouble = currentValue.doubleValue();
+
+        return new SimulationContext(positions, currentValue);
+    }
+
+    /**
+     * Prepares simulation parameters from portfolio data and request overrides.
+     */
+    private SimulationParameters prepareSimulationParameters(List<PortfolioPosition> positions, RunSimulationRequest request) {
         double[] params = deriveParameters(positions, request);
         double dailyReturn = params[0];
         double dailyVolatility = params[1];
 
-        log.debug("Simulation params currentValue={} dailyReturn={} dailyVol={}",
-                currentValue, dailyReturn, dailyVolatility);
+        log.debug("Simulation params dailyReturn={} dailyVol={}", dailyReturn, dailyVolatility);
+        return new SimulationParameters(dailyReturn, dailyVolatility);
+    }
 
-        // ── Run GBM paths in parallel ─────────────────────────────────────
+    /**
+     * Executes the Monte Carlo simulation run and builds the payload.
+     */
+    private SimulationPayload executeSimulationRun(SimulationContext context, SimulationParameters params, RunSimulationRequest request) {
         int n = request.numberOfSimulations();
         int days = request.timeHorizonDays();
+        double currentValueDouble = context.currentValue().doubleValue();
 
-        List<SimulatedPath> allPaths = IntStream.range(0, n)
-                .parallel()
-                .mapToObj(pathId -> generatePath(pathId, currentValueDouble, dailyReturn, dailyVolatility, days))
-                .collect(Collectors.toList());
+        // Run GBM paths in parallel using dedicated executor
+        double[][] paths = runParallelPaths(n, days, currentValueDouble, params.dailyReturn(), params.dailyVolatility());
 
-        // ── Compute statistics from final values ──────────────────────────
-        double[] finalValues = allPaths.stream()
-                .mapToDouble(p -> p.values().getLast().value())
-                .toArray();
-        Arrays.sort(finalValues);
-
+        // Compute statistics and outcomes
+        double[] finalValues = extractAndSortFinalValues(paths, n, days);
         Statistics statistics = computeStatistics(finalValues);
         Outcomes outcomes = computeOutcomes(finalValues, currentValueDouble, n, request.confidenceLevel());
 
-        // ── Percentile envelopes ──────────────────────────────────────────
+        // Convert to domain objects for payload
+        List<SimulatedPath> allPaths = convertPathsToDomain(paths, n);
         List<PercentileSeries> percentileSeries = buildPercentileSeries(allPaths, finalValues, currentValueDouble, days);
-
-        // ── Distribution histogram ────────────────────────────────────────
         List<DistributionBucket> distribution = buildDistribution(finalValues, n);
 
-        // ── Persist ───────────────────────────────────────────────────────
-        SimulationPayload payload = new SimulationPayload(
-                statistics, outcomes, percentileSeries, allPaths, distribution);
+        return new SimulationPayload(statistics, outcomes, percentileSeries, allPaths, distribution);
+    }
 
-        Simulation saved = simulationRepository.save(
+    /**
+     * Runs GBM paths in parallel using the dedicated simulation executor.
+     */
+    private double[][] runParallelPaths(int n, int days, double currentValue, double dailyReturn, double dailyVolatility) {
+        double[][] paths = new double[n][days + 1];
+
+        List<CompletableFuture<Void>> futures = IntStream.range(0, n)
+                .mapToObj(pathId -> CompletableFuture.runAsync(
+                        () -> generatePathPrimitive(paths[pathId], currentValue, dailyReturn, dailyVolatility, days),
+                        simulationExecutor))
+                .toList();
+
+        futures.forEach(CompletableFuture::join);
+        return paths;
+    }
+
+    /**
+     * Extracts final values from paths and sorts them for statistical analysis.
+     */
+    private double[] extractAndSortFinalValues(double[][] paths, int n, int days) {
+        double[] finalValues = new double[n];
+        for (int i = 0; i < n; i++) {
+            finalValues[i] = paths[i][days];
+        }
+        Arrays.sort(finalValues);
+        return finalValues;
+    }
+
+    /**
+     * Converts primitive path arrays to domain objects for persistence.
+     */
+    private List<SimulatedPath> convertPathsToDomain(double[][] paths, int n) {
+        List<SimulatedPath> allPaths = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            allPaths.add(convertToDomainPath(i, paths[i]));
+        }
+        return allPaths;
+    }
+
+    /**
+     * Persists the simulation results to the database.
+     */
+    private Simulation persistResults(RunSimulationRequest request, UUID userId, BigDecimal currentValue,
+                                     SimulationPayload payload, int n, int days) {
+        return simulationRepository.save(
                 Simulation.builder()
                         .portfolioId(request.portfolioId())
                         .userId(userId)
@@ -137,17 +239,22 @@ public class MonteCarloSimulationService implements SimulationPort {
                         .resultPayload(payload)
                         .build()
         );
-
-        log.info("Simulation saved id={}", saved.getId());
-        return simulationMapper.toDto(saved);
-
     }
+
+    /**
+     * Value object holding simulation context data.
+     */
+    private record SimulationContext(List<PortfolioPosition> positions, BigDecimal currentValue) {}
+
+    /**
+     * Value object holding simulation parameters.
+     */
+    private record SimulationParameters(double dailyReturn, double dailyVolatility) {}
 
     @Transactional(readOnly = true)
     /**
      * Loads a single simulation result owned by the requesting user.
      */
-    @Override
     public SimulationResultDto get(UUID simulationId, UUID userId) {
         Simulation simulation = simulationRepository.findByIdAndUserId(simulationId, userId)
                 .orElseThrow(() -> new SimulationNotFoundException(
@@ -159,7 +266,6 @@ public class MonteCarloSimulationService implements SimulationPort {
     /**
      * Lists simulations previously run for a portfolio by the requesting user.
      */
-    @Override
     public List<SimulationResultDto> listForPortfolio(UUID portfolioId, UUID userId) {
         // Ownership of the portfolio is implicitly enforced: we only return
         // rows where user_id matches — no separate portfolio auth needed.
@@ -175,12 +281,12 @@ public class MonteCarloSimulationService implements SimulationPort {
     /**
      * Geometric Brownian Motion path: S(t+1) = S(t) × exp((μ - ½σ²)dt + σ√dt × Z)
      * where Z ~ N(0,1) and dt = 1 (one trading day).
+     * Optimized version using primitive array for memory efficiency.
      */
-    private SimulatedPath generatePath(int pathId, double s0,
+    private void generatePathPrimitive(double[] path, double s0,
                                        double dailyReturn, double dailyVol, int days) {
         ThreadLocalRandom rng = ThreadLocalRandom.current();
-        List<PortfolioPath> values = new ArrayList<>(days + 1);
-        values.add(new PortfolioPath(0, s0));
+        path[0] = s0;
 
         double drift = dailyReturn - 0.5 * dailyVol * dailyVol;
         double s = s0;
@@ -191,9 +297,19 @@ public class MonteCarloSimulationService implements SimulationPort {
             double u2 = rng.nextDouble();
             double z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
             s = s * Math.exp(drift + dailyVol * z);
-            values.add(new PortfolioPath(d, Math.max(s, 0.0)));
+            path[d] = Math.max(s, 0.0);
         }
+    }
 
+    /**
+     * Converts primitive path array to domain object for persistence.
+     * Used only for final payload construction.
+     */
+    private SimulatedPath convertToDomainPath(int pathId, double[] path) {
+        List<PortfolioPath> values = new ArrayList<>(path.length);
+        for (int d = 0; d < path.length; d++) {
+            values.add(new PortfolioPath(d, path[d]));
+        }
         return new SimulatedPath(pathId, values);
     }
 
@@ -212,19 +328,19 @@ public class MonteCarloSimulationService implements SimulationPort {
         if (hasReturnOverride && hasVolOverride) {
             double annualReturn = request.assumedReturnPercent() / 100.0;
             double annualVol = request.assumedVolatilityPercent() / 100.0;
-            return new double[]{annualReturn / TRADING_DAYS, annualVol / Math.sqrt(TRADING_DAYS)};
+            double tradingDays = tradingConfig.getTradingDaysPerYear();
+            return new double[]{annualReturn / tradingDays, annualVol / Math.sqrt(tradingDays)};
         }
 
         // Fetch historical bars to derive empirical μ and σ
-        LocalDate to = TradingUtil.lastCompletedTradingDay();
-        LocalDate from = to.minusDays(HISTORY_DAYS);
+        DateRangeUtil.DateRangeResult dateRange = DateRangeUtil.calculateHistoricalRange(tradingConfig.getHistoryLookbackDays());
 
         Map<String, List<PriceBar>> barsByTicker = positions.stream()
                 .map(pos -> pos.getAsset().getTicker())
                 .distinct()
                 .collect(Collectors.toMap(
                         t -> t,
-                        t -> marketDataPort.getHistoricalBars(t, from, to)
+                        t -> marketDataPort.getHistoricalBars(t, dateRange.from(), dateRange.to())
                 ));
 
         List<Double> portfolioReturns = buildPortfolioReturns(positions, barsByTicker);
@@ -234,22 +350,23 @@ public class MonteCarloSimulationService implements SimulationPort {
 
         double annualVol = portfolioReturns.size() >= 2
                 ? riskPort.annualisedVolatility(portfolioReturns) / 100.0  // convert % → decimal
-                : DEFAULT_ANNUAL_VOLATILITY;
+                : tradingConfig.getDefaultAnnualVolatility();
 
+        double tradingDays = tradingConfig.getTradingDaysPerYear();
         double annualReturn = hasReturnOverride
                 ? request.assumedReturnPercent() / 100.0
-                : portfolioReturns.stream().mapToDouble(Double::doubleValue).average().orElse(0.0) * TRADING_DAYS;
+                : portfolioReturns.stream().mapToDouble(Double::doubleValue).average().orElse(0.0) * tradingDays;
 
         log.info("annualVol={} annualReturn={} dailyReturn={} dailyVol={}",
                 annualVol, annualReturn,
-                annualReturn / 252.0,
-                annualVol / Math.sqrt(252.0));
+                annualReturn / tradingDays,
+                annualVol / Math.sqrt(tradingDays));
 
         double useVol = hasVolOverride
                 ? request.assumedVolatilityPercent() / 100.0
                 : annualVol;
 
-        return new double[]{annualReturn / TRADING_DAYS, useVol / Math.sqrt(TRADING_DAYS)};
+        return new double[]{annualReturn / tradingDays, useVol / Math.sqrt(tradingDays)};
     }
 
     private List<Double> buildPortfolioReturns(List<PortfolioPosition> positions,
@@ -333,7 +450,9 @@ public class MonteCarloSimulationService implements SimulationPort {
         List<PercentileSeries> result = new ArrayList<>(PERCENTILES.length);
 
         for (int pct : PERCENTILES) {
-            int targetIndex = (int) Math.floor((pct / 100.0) * (sortedFinalValues.length - 1));
+            // Use long arithmetic to prevent integer overflow, then clamp to valid bounds
+            long targetIndexLong = (long) Math.floor((pct / 100.0) * (sortedFinalValues.length - 1L));
+            int targetIndex = (int) Math.min(targetIndexLong, sortedFinalValues.length - 1L);
             double targetFinalValue = sortedFinalValues[targetIndex];
 
             // Find the actual path whose final value is closest to this percentile target
@@ -373,19 +492,7 @@ public class MonteCarloSimulationService implements SimulationPort {
     // ── Portfolio value ───────────────────────────────────────────────────
 
     private BigDecimal computeCurrentValue(List<PortfolioPosition> positions) {
-        return positions.stream()
-                .map(pos -> {
-                    try {
-                        BigDecimal price = marketDataPort.getLatestPrice(pos.getAsset().getTicker());
-                        BigDecimal posValue = price.multiply(pos.getQuantity());
-                        log.info("position ticker={} qty={} price={} value={}",
-                                pos.getAsset().getTicker(), pos.getQuantity(), price, posValue);
-                        return posValue;
-                    } catch (Exception e) {
-                        log.warn("Failed to fetch price for ticker={}", pos.getAsset().getTicker(), e);
-                        return BigDecimal.ZERO;
-                    }
-                })
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Use portfolio valuation service to decouple from market data internals
+        return portfolioValuationService.computeCurrentValue(positions);
     }
 }
