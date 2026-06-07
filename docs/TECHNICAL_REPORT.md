@@ -517,9 +517,9 @@ The system is ready for production deployment with confidence in its reliability
 
 ---
 
-**Document Control:**
+## Questions & Updates
 
-| Version | Date | Author           | Changes |
-|---------|------|------------------|---------|
-| 1.0 | June 4, 2026 | Veselin Nikolaev | Initial release |
+For questions, refer to the implementation components or contact the author.
+
+When adding new features, update this document with any new patterns, edge cases, or exceptions that arise.
 
