@@ -42,37 +42,37 @@ The system transitioned from a coupled, monolithic structure to a domain-driven,
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Auth Context                             │
-│  - User aggregate with credential ownership invariants     │
-│  - JWT lifecycle management with refresh rotation        │
-│  - Timing-attack mitigation in password verification      │
+│  - User aggregate with credential ownership invariants      │
+│  - JWT lifecycle management with refresh rotation           │
+│  - Timing-attack mitigation in password verification        │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
 │                  Portfolio Context                          │
-│  - Portfolio aggregate with position invariants            │
-│  - Asset catalog with ticker normalization                 │
+│  - Portfolio aggregate with position invariants             │
+│  - Asset catalog with ticker normalization                  │
 │  - CQRS split between command and query operations          │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│               Simulation Context                             │
-│  - Simulation aggregate with GBM result persistence          │
+│               Simulation Context                            │
+│  - Simulation aggregate with GBM result persistence         │
 │  - JSONB payload optimization for large result sets         │
 │  - Parallel path generation with dedicated executor         │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│                Market Data Context                           │
+│                Market Data Context                          │
 │  - PriceBar aggregate with OHLCV data                       │
-│  - Yahoo Finance adapter for external data                 │
-│  - Async synchronization with virtual threads              │
+│  - Yahoo Finance adapter for external data                  │
+│  - Async synchronization with virtual threads               │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
 │                   Risk Context                              │
-│  - Shared kernel for quantitative calculations             │
-│  - Volatility, Sharpe ratio, VaR, correlation metrics      │
-│  - Domain-agnostic mathematical operations                 │
+│  - Shared kernel for quantitative calculations              │
+│  - Volatility, Sharpe ratio, VaR, correlation metrics       │
+│  - Domain-agnostic mathematical operations                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
