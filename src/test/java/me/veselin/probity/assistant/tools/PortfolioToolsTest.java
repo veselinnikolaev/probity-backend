@@ -83,12 +83,12 @@ class PortfolioToolsTest {
     void getPortfolioDetail_withValidIds_returnsFormattedResponse() {
         UUID userId = UUID.randomUUID();
         UUID portfolioId = UUID.randomUUID();
-        when(dashboardQueryPort.getSummary(any(), any(), eq(userId))).thenReturn(null);
-        when(dashboardQueryPort.getPositions(any(), eq(userId))).thenReturn(List.of());
+        when(dashboardQueryPort.getSummary(eq(portfolioId), any(), eq(userId))).thenReturn(null);
+        when(dashboardQueryPort.getPositions(eq(portfolioId), eq(userId))).thenReturn(List.of());
 
         String result = portfolioTools.getPortfolioDetail(userId.toString(), portfolioId.toString(), "1M");
 
-        assertThat(result).isNotNull();
+        assertThat(result).contains("No portfolio summary data found");
     }
 
     @Test
@@ -113,7 +113,7 @@ class PortfolioToolsTest {
 
         String result = portfolioTools.getRiskMetrics(userId.toString(), portfolioId.toString(), "3M");
 
-        assertThat(result).isNotNull();
+        assertThat(result).contains("No risk metrics data found");
     }
 
     @Test

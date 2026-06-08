@@ -37,6 +37,9 @@ public class ToolResponseFormatter {
     }
 
     public static String formatPortfolioDetail(PortfolioSummaryDto summary, List<PositionDto> positions) {
+        if (summary == null) {
+            return "No portfolio summary data found for this portfolio.";
+        }
         StringBuilder sb = new StringBuilder();
         sb.append("Portfolio Summary:\n");
         sb.append("Current Value: ").append(CURRENCY_FORMAT.format(summary.totalValue())).append("\n");

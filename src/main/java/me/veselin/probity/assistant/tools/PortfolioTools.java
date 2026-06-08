@@ -90,6 +90,7 @@ public class PortfolioTools {
             UUID portfolioUuid = parsePortfolioId(portfolioId);
             String r = (range == null || range.isBlank()) ? "3M" : range;
             var metrics = riskQueryPort.getRiskMetrics(portfolioUuid, r, userUuid);
+            if (metrics == null) return "No risk metrics data found for this portfolio.";
             return ToolResponseFormatter.formatRiskMetrics(metrics);
         } catch (AssistantToolException e) {
             return e.getMessage();
@@ -115,6 +116,7 @@ public class PortfolioTools {
             UUID portfolioUuid = parsePortfolioId(portfolioId);
             String r = (range == null || range.isBlank()) ? "3M" : range;
             var matrix = riskQueryPort.getCorrelationMatrix(portfolioUuid, r, userUuid);
+            if (matrix == null) return "No correlation matrix data found for this portfolio.";
             return ToolResponseFormatter.formatCorrelationMatrix(matrix);
         } catch (AssistantToolException e) {
             return e.getMessage();

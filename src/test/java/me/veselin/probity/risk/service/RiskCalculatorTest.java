@@ -27,7 +27,6 @@ class RiskCalculatorTest {
     @BeforeEach
     void setUp() {
         calculator = new RiskCalculator(new TradingConfiguration());
-        injectRiskFreeRate(calculator, 0.045);
     }
 
     // ── annualisedVolatility ─────────────────────────────────────────────────
@@ -431,9 +430,12 @@ class RiskCalculatorTest {
 
     private static void injectRiskFreeRate(RiskCalculator calc, double rate) {
         try {
-            var field = RiskCalculator.class.getDeclaredField("riskFreeRate");
-            field.setAccessible(true);
-            field.set(calc, rate);
+            var tradingConfigField = RiskCalculator.class.getDeclaredField("tradingConfig");
+            tradingConfigField.setAccessible(true);
+            var tradingConfig = tradingConfigField.get(calc);
+            var riskFreeRateField = tradingConfig.getClass().getDeclaredField("riskFreeRate");
+            riskFreeRateField.setAccessible(true);
+            riskFreeRateField.set(tradingConfig, rate);
         } catch (Exception e) {
             throw new RuntimeException("Could not inject riskFreeRate", e);
         }
