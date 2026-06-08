@@ -75,6 +75,14 @@ The system transitioned from a coupled, monolithic structure to a domain-driven,
 │  - Volatility, Sharpe ratio, VaR, correlation metrics      │
 │  - Domain-agnostic mathematical operations                 │
 └─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                Assistant Context                             │
+│  - AI-powered portfolio risk analyst with Spring AI        │
+│  - Tool calling for portfolio, risk, and market data       │
+│  - Redis-backed chat memory with 7-day TTL                 │
+│  - Rate-limited endpoint (10 req/60s per IP)               │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### 1.3 Port and Adapter Pattern
@@ -84,6 +92,7 @@ The system transitioned from a coupled, monolithic structure to a domain-driven,
 - `PortfolioCommandController` - Portfolio mutation operations
 - `PortfolioQueryController` - Portfolio read operations
 - `SimulationController` - Monte Carlo simulation execution
+- `AssistantController` - AI-powered portfolio analyst chat endpoint
 
 **Outbound Adapters (Infrastructure):**
 - `UserRepository` - JPA persistence for user data
@@ -91,6 +100,7 @@ The system transitioned from a coupled, monolithic structure to a domain-driven,
 - `SimulationRepository` - JPA persistence with JSONB support
 - `FinanceAdapter` - External market data integration
 - `JwtService` - JWT token generation and validation
+- `RedisChatMemoryRepository` - Chat memory persistence for AI assistant
 
 **Domain Ports (Interfaces):**
 - `AuthCommandPort` - Authentication operations contract
@@ -99,6 +109,7 @@ The system transitioned from a coupled, monolithic structure to a domain-driven,
 - `SimulationPort` - Simulation operations contract
 - `MarketDataPort` - Market data retrieval contract
 - `RiskPort` - Risk calculation contract
+- `AssistantPort` - AI assistant chat contract
 
 ### 1.4 Architectural Audit Findings
 
@@ -111,6 +122,73 @@ The system transitioned from a coupled, monolithic structure to a domain-driven,
 **Areas for Improvement:**
 - Domain entities currently contain JPA annotations (violates pure domain principle)
 - Recommendation: Separate domain entities from JPA entities using mapping layer
+
+---
+
+## 1.5 Assistant Context Implementation
+
+### 1.5.1 Spring AI Integration
+
+The assistant context leverages Spring AI to provide an intelligent portfolio risk analyst interface:
+
+**Core Components:**
+- `AssistantService` - Implements Spring AI ChatClient with portfolio analyst persona
+- `PortfolioTools` - Spring AI tool annotations for portfolio operations
+- `ToolResponseFormatter` - Formats tool responses for AI consumption
+- `RedisChatMemoryRepository` - Chat memory persistence in Redis
+
+### 1.5.2 Tool Calling Architecture
+
+The assistant uses function calling to access real portfolio data:
+
+**Available Tools:**
+- `getPortfolios` - Retrieve all portfolios with summary metrics
+- `getPortfolioDetail` - Get detailed portfolio information including positions
+- `getRiskMetrics` - Retrieve risk metrics (VaR, Sharpe, volatility, drawdown)
+- `getCorrelationMatrix` - View asset correlation matrices
+- `getLatestSimulation` - Access Monte Carlo simulation results
+- `getMarketData` - Fetch historical market data for specific tickers
+
+**Tool Response Formatting:**
+- Currency values formatted with 2 decimal places (e.g., $12,345.67)
+- Percentages formatted with 1 decimal (e.g., 4.2%)
+- Structured output for easy AI consumption
+- Safe error handling with user-facing messages
+
+### 1.5.3 Chat Memory Management
+
+**Redis-based Chat Memory:**
+- Key prefix: `probity:chat_memory:`
+- TTL: 7 days per conversation
+- Message window: Configurable (default: 20 messages)
+- User-scoped conversation IDs for isolation
+
+**Memory Flow:**
+1. User sends chat request with authentication
+2. ChatClient retrieves conversation history from Redis
+3. AI processes message with context from previous turns
+4. Updated conversation saved back to Redis
+
+### 1.5.4 Rate Limiting
+
+**Endpoint Protection:**
+- 10 requests per 60 seconds per IP
+- Tighter than other endpoints due to AI cost considerations
+- Configurable via `@RateLimit` annotation
+- Redis-backed distributed rate limiting
+
+### 1.5.5 Security Considerations
+
+**Authentication:**
+- Requires valid JWT token
+- User ID extracted from authentication principal
+- Portfolio access enforced at tool level
+
+**Tool Safety:**
+- Input validation for UUID parameters
+- Safe error messages (no stack traces to AI)
+- Tool exceptions caught and returned as plain strings
+- Portfolio ownership verification in tools
 
 ---
 

@@ -14,6 +14,12 @@ import org.springframework.stereotype.Component;
 public class TradingConfiguration {
 
     /**
+     * Risk-free rate (as decimal, e.g., 0.045 for 4.5%).
+     * Used in risk calculations.
+     */
+    private double riskFreeRate = 0.045;
+
+    /**
      * Standard trading days per year (NYSE calendar).
      * Used for annualizing daily volatility and returns.
      */

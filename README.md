@@ -73,10 +73,11 @@ Probity solves the challenge of real-time portfolio risk assessment by combining
 
 - **Java 21**: Latest LTS with Project Loom virtual threads (JEP 444)
 - **Spring Boot 3.x**: Modern Spring framework with native image support
+- **Spring AI**: AI-powered portfolio analyst with tool calling and chat memory
 - **Virtual Threads**: I/O-bound operations use `Executors.newVirtualThreadPerTaskExecutor()`
 - **Dedicated Thread Pools**: CPU-bound simulations use custom `ThreadPoolTaskExecutor` with `CallerRunsPolicy`
 - **PostgreSQL**: System of record with JSONB for simulation payloads
-- **Redis**: Caching, session management, and rate limiting
+- **Redis**: Caching, session management, rate limiting, and chat memory persistence
 - **Testcontainers**: Integration testing with real PostgreSQL and Redis
 - **Flyway**: Database schema migration management
 
@@ -160,11 +161,12 @@ Edge cases handled:
   - `marketdata`: persisted OHLCV bars + adapter-backed gap filling
   - `risk`: quantitative calculations (volatility, Sharpe, VaR, drawdown, correlation)
   - `simulation`: Monte Carlo runs and JSONB payload persistence
+  - `assistant`: AI-powered portfolio risk analyst with Spring AI tool calling
 - **DDD style**
   - Aggregate roots enforce invariants in domain methods
   - Soft-delete centralized via `BaseEntitySoftDelete`
 - **Ports/adapters**
-  - Ports like `RiskPort`, `MarketDataPort`, `PortfolioPort`, `AuthCommandPort` separate use-case code from implementations
+  - Ports like `RiskPort`, `MarketDataPort`, `PortfolioPort`, `AuthCommandPort`, `AssistantPort` separate use-case code from implementations
 - **CQRS split**
   - Write paths handled by command services (e.g., `PortfolioCommandService`)
   - Read paths assembled by query services (e.g., `PortfolioQueryService`)
@@ -177,6 +179,7 @@ Edge cases handled:
 Probity
 ├─ src/main/java/me/veselin/probity
 │  ├─ auth/                # Auth domain, ports, JWT, repositories, command/query services
+│  ├─ assistant/           # AI-powered portfolio analyst, Spring AI tools, chat memory
 │  ├─ bff/                 # Controllers, request/response DTOs, security filters/config, cookies
 │  ├─ common/              # Shared base entities, config, exceptions, utility helpers
 │  ├─ marketdata/          # PriceBar aggregate, Yahoo adapter, sync/read services, port
@@ -289,6 +292,44 @@ Run specific test classes:
   - Monte Carlo results are stored as one JSONB payload per run to optimize read-back and keep relational schema stable.
 - **Primitive arrays for simulation paths**
   - Uses `double[][]` instead of `List<List<Double>>` to minimize GC overhead and memory footprint for large simulation runs.
+
+## AI-Powered Portfolio Assistant
+
+Probity includes an AI-powered portfolio risk analyst that provides natural language access to portfolio data, risk metrics, and simulation results.
+
+### Features
+
+- **Natural Language Interface**: Ask questions about portfolios, risk, and market data in plain English
+- **Tool Calling**: The assistant uses Spring AI tool calling to query real portfolio data
+- **Chat Memory**: Redis-backed conversation history with 7-day TTL per user
+- **Rate Limited**: 10 requests per 60 seconds per IP to control AI costs
+- **Portfolio Tools**:
+  - Get all portfolios with summary metrics
+  - Get detailed portfolio information including positions
+  - Retrieve risk metrics (VaR, Sharpe, volatility, drawdown)
+  - View asset correlation matrices for diversification analysis
+  - Access Monte Carlo simulation results
+  - Fetch historical market data for specific tickers
+
+### Architecture
+
+The assistant follows the hexagonal architecture pattern:
+- **AssistantPort**: Domain interface defining the chat contract
+- **AssistantService**: Implements Spring AI ChatClient with portfolio analyst persona
+- **PortfolioTools**: Spring AI tool annotations for portfolio operations
+- **RedisChatMemoryRepository**: Chat memory persistence in Redis
+- **AssistantController**: BFF endpoint with rate limiting
+
+### Usage
+
+```bash
+curl -X POST http://localhost:8080/api/assistant/chat \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=..." \
+  -d '{"message": "What is my portfolio risk?"}'
+```
+
+The assistant will automatically call the appropriate tools to fetch portfolio data and provide a natural language response.
 
 ## Common Workflows
 

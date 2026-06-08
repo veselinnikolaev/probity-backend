@@ -64,4 +64,8 @@ public final class ApiRoutes {
         public static final String SIMULATION = SIMULATIONS + "/{id}";
     }
 
+    public static final class Assistant {
+        public static final String ASSISTANT = V1 + "/assistant";
+        public static final String CHAT = ASSISTANT + "/chat";
+    }
 }

@@ -10,7 +10,6 @@ import me.veselin.probity.portfolio.enumeration.AssetType;
 import me.veselin.probity.risk.dto.DistributionStatistics;
 import me.veselin.probity.risk.enumeration.RiskLevel;
 import me.veselin.probity.risk.port.RiskPort;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -44,9 +43,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RiskCalculator implements RiskPort {
 
-    @Value("${probity.risk.risk-free-rate:0.045}")
-    private double riskFreeRate;
-
     private final TradingConfiguration tradingConfig;
 
     @Override
@@ -67,7 +63,7 @@ public class RiskCalculator implements RiskPort {
             return 0.0;
         }
         double tradingDays = tradingConfig.getTradingDaysPerYear();
-        double riskFreeDaily = riskFreeRate / tradingDays;
+        double riskFreeDaily = tradingConfig.getRiskFreeRate() / tradingDays;
         return ((mean - riskFreeDaily) / stdDev) * Math.sqrt(tradingDays);
     }
 

@@ -11,7 +11,6 @@ import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioQueryPort;
 import me.veselin.probity.portfolio.repository.PortfolioRepository;
 import me.veselin.probity.portfolio.service.portfolio.PortfolioDataHelper.PortfolioTimeSeries;
-import me.veselin.probity.risk.port.RiskPort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +31,6 @@ public class PortfolioQueryService implements PortfolioQueryPort {
 
     private final PortfolioRepository portfolioRepository;
     private final PortfolioDataHelper portfolioDataHelper;
-    private final RiskPort riskPort;
 
     // ── Access control ────────────────────────────────────────────────────────
 
