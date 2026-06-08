@@ -2,7 +2,6 @@
 
 **Version**: 1.0  
 **Date**: June 4, 2026  
-**Author**: Principal Software Architect  
 **Status**: Production Ready
 
 ---
@@ -43,37 +42,37 @@ The system transitioned from a coupled, monolithic structure to a domain-driven,
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Auth Context                             │
-│  - User aggregate with credential ownership invariants     │
-│  - JWT lifecycle management with refresh rotation        │
-│  - Timing-attack mitigation in password verification      │
+│  - User aggregate with credential ownership invariants      │
+│  - JWT lifecycle management with refresh rotation           │
+│  - Timing-attack mitigation in password verification        │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
 │                  Portfolio Context                          │
-│  - Portfolio aggregate with position invariants            │
-│  - Asset catalog with ticker normalization                 │
+│  - Portfolio aggregate with position invariants             │
+│  - Asset catalog with ticker normalization                  │
 │  - CQRS split between command and query operations          │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│               Simulation Context                             │
-│  - Simulation aggregate with GBM result persistence          │
+│               Simulation Context                            │
+│  - Simulation aggregate with GBM result persistence         │
 │  - JSONB payload optimization for large result sets         │
 │  - Parallel path generation with dedicated executor         │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│                Market Data Context                           │
+│                Market Data Context                          │
 │  - PriceBar aggregate with OHLCV data                       │
-│  - Yahoo Finance adapter for external data                 │
-│  - Async synchronization with virtual threads              │
+│  - Yahoo Finance adapter for external data                  │
+│  - Async synchronization with virtual threads               │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
 │                   Risk Context                              │
-│  - Shared kernel for quantitative calculations             │
-│  - Volatility, Sharpe ratio, VaR, correlation metrics      │
-│  - Domain-agnostic mathematical operations                 │
+│  - Shared kernel for quantitative calculations              │
+│  - Volatility, Sharpe ratio, VaR, correlation metrics       │
+│  - Domain-agnostic mathematical operations                  │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -596,9 +595,9 @@ The system is ready for production deployment with confidence in its reliability
 
 ---
 
-**Document Control:**
+## Questions & Updates
 
-| Version | Date | Author           | Changes |
-|---------|------|------------------|---------|
-| 1.0 | June 4, 2026 | Veselin Nikolaev | Initial release |
+For questions, refer to the implementation components or contact the author.
+
+When adding new features, update this document with any new patterns, edge cases, or exceptions that arise.
 
