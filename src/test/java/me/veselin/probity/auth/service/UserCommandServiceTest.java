@@ -30,7 +30,7 @@ class UserCommandServiceTest {
 
     @BeforeEach
     void setUp() {
-        userCommandService = new UserCommandService(userRepository, passwordEncoder, jwtService);
+        userCommandService = new UserCommandService(userRepository, passwordEncoder, jwtService, null);
     }
 
     // ── Timing Attack Mitigation Tests ─────────────────────────────────────────
@@ -56,7 +56,7 @@ class UserCommandServiceTest {
     @Test
     void login_constantTime_forInvalidPassword() {
         when(userRepository.findByUsernameOrEmail("validuser", "validuser")).thenReturn(java.util.Optional.of(
-                User.create("validuser", "user@test.com", "hashedpassword")
+                User.create("Test", "User", "validuser", "user@test.com", "hashedpassword")
         ));
         when(passwordEncoder.matches("wrongpassword", "hashedpassword")).thenReturn(false);
 
@@ -75,7 +75,7 @@ class UserCommandServiceTest {
     @Test
     void login_constantTime_forValidCredentials() {
         when(userRepository.findByUsernameOrEmail("validuser", "validuser")).thenReturn(java.util.Optional.of(
-                User.create("validuser", "user@test.com", "hashedpassword")
+                User.create("Test", "User", "validuser", "user@test.com", "hashedpassword")
         ));
         when(passwordEncoder.matches("correctpassword", "hashedpassword")).thenReturn(true);
 

@@ -24,6 +24,8 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(String.format("""
                                 {
+                                    "firstName": "New",
+                                    "lastName": "User",
                                     "username": "%s",
                                     "email": "%s",
                                     "password": "%s"
@@ -38,6 +40,8 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(String.format("""
                                 {
+                                    "firstName": "Other",
+                                    "lastName": "User",
                                     "username": "%s",
                                     "email": "other@probity.test",
                                     "password": "%s"
@@ -53,6 +57,8 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(String.format("""
                                 {
+                                    "firstName": "Other",
+                                    "lastName": "Admin",
                                     "username": "otheradmin",
                                     "email": "%s",
                                     "password": "%s"
@@ -68,6 +74,8 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(String.format("""
                                 {
+                                    "firstName": "Test",
+                                    "lastName": "User",
                                     "username": "%s",
                                     "email": "notanemail",
                                     "password": "%s"
@@ -83,6 +91,8 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(String.format("""
                                 {
+                                    "firstName": "Test",
+                                    "lastName": "User",
                                     "username": "%s",
                                     "email": "%s",
                                     "password": "weakpassword"
@@ -98,6 +108,8 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(String.format("""
                                 {
+                                    "firstName": "Test",
+                                    "lastName": "User",
                                     "username": "invalid user!",
                                     "email": "%s",
                                     "password": "%s"
@@ -113,6 +125,8 @@ public class RegisterIntegrationTest extends BaseAuthIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(String.format("""
                                 {
+                                    "firstName": "Test",
+                                    "lastName": "User",
                                     "username": "ab",
                                     "email": "%s",
                                     "password": "%s"

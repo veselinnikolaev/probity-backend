@@ -18,6 +18,8 @@ public final class ApiRoutes {
         public static final String LOGOUT = ROOT + "/logout";
         public static final String REFRESH = ROOT + "/refresh";
         public static final String CSRF = ROOT + "/csrf";
+        public static final String VERIFY = ROOT + "/verify";
+        public static final String RESEND_VERIFICATION = ROOT + "/resend-verification";
     }
 
     public static final class Users {

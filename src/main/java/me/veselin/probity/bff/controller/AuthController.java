@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import me.veselin.probity.auth.dto.LoginCommand;
 import me.veselin.probity.auth.dto.RegisterCommand;
 import me.veselin.probity.auth.exception.UnauthorizedException;
+import me.veselin.probity.auth.port.EmailVerificationPort;
 import me.veselin.probity.bff.cookie.CookieService;
 import me.veselin.probity.bff.dto.auth.AuthResponse;
 import me.veselin.probity.bff.dto.auth.LoginRequest;
@@ -20,17 +21,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
-import org.springframework.web.bind.annotation.CookieValue;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthCommandPort authCommandPort;
+    private final EmailVerificationPort emailVerificationPort;
     private final CookieService cookieService;
     private final CsrfTokenRepository csrfTokenRepository;
 
@@ -65,9 +63,41 @@ public class AuthController {
     @RateLimit(requests = 3, seconds = 60)
     public ResponseEntity<Void> register(@Valid @RequestBody RegisterRequest request) {
         authCommandPort.register(
-                new RegisterCommand(request.username(), request.email(), request.password())
+                new RegisterCommand(request.firstName(), request.lastName(),
+                        request.username(), request.email(), request.password())
         );
         return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    /**
+     * POST /auth/verify
+     * Verifies a user's email address using a token sent via email.
+     *
+     * @param token verification token from the email link
+     * @return 204 NO CONTENT on success
+     * @throws me.veselin.probity.auth.exception.UnauthorizedException if token is invalid or expired
+     */
+    @PostMapping(ApiRoutes.Auth.VERIFY)
+    @RateLimit(requests = 10, seconds = 60)
+    public ResponseEntity<Void> verifyEmail(@RequestParam String token) {
+        emailVerificationPort.verify(token);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * POST /auth/resend-verification
+     * Resends the verification email for an unverified account.
+     * Silently no-ops if the account is already active.
+     *
+     * @param email email address of the unverified account
+     * @return 204 NO CONTENT on success
+     * @throws me.veselin.probity.auth.exception.UnauthorizedException if no account exists for the email
+     */
+    @PostMapping(ApiRoutes.Auth.RESEND_VERIFICATION)
+    @RateLimit(requests = 3, seconds = 300)
+    public ResponseEntity<Void> resendVerification(@RequestParam String email) {
+        emailVerificationPort.resendVerification(email);
+        return ResponseEntity.noContent().build();
     }
 
     /**

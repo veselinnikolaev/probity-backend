@@ -8,6 +8,7 @@ import me.veselin.probity.auth.dto.RegisterCommand;
 import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.auth.port.AuthCommandPort;
 import me.veselin.probity.auth.dto.AuthResult;
+import me.veselin.probity.auth.repository.UserRepository;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.common.exception.ConflictException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,8 @@ public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
     MockMvc mockMvc;
     @Autowired
     protected ObjectMapper objectMapper;
+    @Autowired
+    UserRepository userRepository;
 
     protected static final String ADMIN_USERNAME = "admin";
     protected static final String ADMIN_EMAIL = "admin@probity.test";
@@ -57,9 +60,14 @@ public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
 
     protected AuthResult registerAndLogin(String username, String email, String password) throws Exception {
         try {
-            authCommandPort.register(new RegisterCommand(username, email, password));
+            authCommandPort.register(new RegisterCommand("Test", "User", username, email, password));
         } catch (ConflictException ignored) {
         }
+
+        userRepository.findByUsername(username).ifPresent(user -> {
+            user.verify();
+            userRepository.save(user);
+        });
 
         MvcResult result = mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -104,8 +112,13 @@ public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
     @Override
     protected void afterSetUp() {
         try {
-            authCommandPort.register(new RegisterCommand(ADMIN_USERNAME, ADMIN_EMAIL, ADMIN_PASSWORD));
+            authCommandPort.register(new RegisterCommand("Admin", "User", ADMIN_USERNAME, ADMIN_EMAIL, ADMIN_PASSWORD));
         } catch (ConflictException ignored) {
         }
+        
+        userRepository.findByUsername(ADMIN_USERNAME).ifPresent(user -> {
+            user.verify();
+            userRepository.save(user);
+        });
     }
 }

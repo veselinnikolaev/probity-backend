@@ -56,7 +56,9 @@ public class SecurityConfiguration {
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                         .ignoringRequestMatchers(
                                 ApiRoutes.Auth.LOGIN,
-                                ApiRoutes.Auth.REGISTER
+                                ApiRoutes.Auth.REGISTER,
+                                ApiRoutes.Auth.VERIFY,
+                                ApiRoutes.Auth.RESEND_VERIFICATION
                         )
                 )
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -71,6 +73,8 @@ public class SecurityConfiguration {
                                 ApiRoutes.Auth.REFRESH,
                                 ApiRoutes.Auth.LOGOUT,
                                 ApiRoutes.Auth.CSRF,
+                                ApiRoutes.Auth.VERIFY,
+                                ApiRoutes.Auth.RESEND_VERIFICATION,
                                 "/actuator/health",
                                 "/error"
                         ).permitAll()

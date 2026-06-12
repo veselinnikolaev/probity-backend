@@ -2,15 +2,18 @@ package me.veselin.probity.auth.service;
 
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
+import me.veselin.probity.auth.enumeration.UserStatus;
 import me.veselin.probity.auth.domain.User;
 import me.veselin.probity.auth.dto.LoginCommand;
 import me.veselin.probity.auth.dto.RegisterCommand;
 import me.veselin.probity.auth.dto.AuthResult;
+import me.veselin.probity.auth.dto.UserRegisteredEvent;
 import me.veselin.probity.auth.exception.UnauthorizedException;
 import me.veselin.probity.auth.jwt.JwtService;
 import me.veselin.probity.auth.port.AuthCommandPort;
 import me.veselin.probity.auth.repository.UserRepository;
 import me.veselin.probity.common.exception.ConflictException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,6 +30,7 @@ public class UserCommandService implements AuthCommandPort {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Authenticates a user and issues a fresh access/refresh token pair.
@@ -37,6 +41,7 @@ public class UserCommandService implements AuthCommandPort {
         User user = userRepository.findByUsernameOrEmail(request.identifier(), request.identifier())
                 .orElse(null);
 
+
         // Constant-time verification: always run bcrypt even if user not found
         // This prevents timing attacks that could reveal whether a username exists
         String hashToCheck = user != null ? user.getPassword() : "$2a$10$dummyhashtopreventtimingattack00000000000000000000000";
@@ -44,6 +49,10 @@ public class UserCommandService implements AuthCommandPort {
 
         if (user == null || !passwordMatches) {
             throw new BadCredentialsException("Invalid credentials");
+        }
+
+        if (user.getStatus() == UserStatus.PENDING_VERIFICATION){
+            throw new UnauthorizedException("User is not verified");
         }
 
         String username = user.getUsername();
@@ -63,6 +72,7 @@ public class UserCommandService implements AuthCommandPort {
 
     /**
      * Creates a new user account after enforcing unique username and email constraints.
+     * Triggers email verification process.
      */
     public void register(RegisterCommand request) {
         if (userRepository.existsByUsername(request.username())) {
@@ -73,8 +83,10 @@ public class UserCommandService implements AuthCommandPort {
         }
 
         String hashedPassword = passwordEncoder.encode(request.password());
-        User user = User.create(request.username(), request.email(), hashedPassword);
+        User user = User.create(request.firstName(), request.lastName(),
+                request.username(), request.email(), hashedPassword);
         userRepository.save(user);
+        eventPublisher.publishEvent(new UserRegisteredEvent(user.getEmail()));
     }
 
     /**
