@@ -22,6 +22,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -30,6 +31,9 @@ import java.util.List;
 public class SecurityConfiguration {
     @Value("${probity.cors.allowed-origins}")
     private String allowedOrigins;
+
+    @Value("${probity.cookie.samesite}")
+    private String sameSite;
 
     @Value("${probity.jwt.secret}")
     private String jwtSecret;
@@ -76,6 +80,7 @@ public class SecurityConfiguration {
                                 ApiRoutes.Auth.VERIFY,
                                 ApiRoutes.Auth.RESEND_VERIFICATION,
                                 "/actuator/health",
+                                "/actuator/prometheus",
                                 "/error"
                         ).permitAll()
                         .anyRequest().authenticated()
@@ -91,7 +96,7 @@ public class SecurityConfiguration {
         CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepo.setCookieCustomizer(cookie -> cookie
                 .path("/")
-                .sameSite("None")
+                .sameSite(sameSite)
                 .secure(true)
                 .httpOnly(false)
                 .maxAge(3600L));
@@ -102,7 +107,11 @@ public class SecurityConfiguration {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOrigins(List.of(allowedOrigins.split(",")));
+        config.setAllowedOrigins(
+                Arrays.stream(allowedOrigins.split(","))
+                        .map(String::trim)
+                        .toList()
+        );
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-XSRF-TOKEN"));
         config.setExposedHeaders(List.of("X-XSRF-TOKEN", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Retry-After"));

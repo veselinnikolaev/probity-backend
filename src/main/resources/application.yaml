@@ -1,0 +1,136 @@
+server:
+  port: ${PORT:8080}
+
+probity:
+  cookie:
+    samesite: ${SAME_SITE:Strict}
+  app:
+    base-url: ${APP_BASE_URL:http://localhost:${PORT}}
+  jwt:
+    secret: ${JWT_SECRET}
+    access:
+      expiration:
+        seconds: 900
+    refresh:
+      expiration:
+        seconds: 604800
+    issuer: probity
+    blacklist-prefix: "probity:blacklist:"
+    refresh-prefix: "probity:refresh:"
+    session-prefix: "session:"
+  assistant:
+    chat-memory:
+      max-messages: ${ASSISTANT_CHAT_MEMORY_MAX_MESSAGES:20}
+    memory:
+      key-prefix: "probity:chat_memory:"
+  trading:
+    trading-days-per-year: 252.0
+    history-lookback-days: 90
+    z-score-95: 1.645
+    volatility-threshold: 15
+    volatility-addon-factor: 10
+    risk-score-increment: 5
+    default-annual-volatility: 0.15
+    risk-free-rate: 0.045
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  verify:
+    email:
+      prefix: "verify:email:"
+      expiration:
+        seconds: 86400
+    user:
+      prefix: "verify:user:"
+      max-retries: 3
+  marketdata:
+    latest-price-lookback-days: 14
+
+spring:
+  docker:
+    compose:
+      enabled: ${SPRING_DOCKER_COMPOSE_ENABLED:false}
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:probity}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600s
+      cache-null-values: false
+      key-prefix: "probity:cache:"
+      use-key-prefix: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: default
+      password: ${REDIS_PASSWORD:password}
+      database: ${REDIS_DATABASE:1}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 5
+          min-idle: 1
+          max-wait: 1000ms
+
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      chat:
+        options:
+          model: claude-sonnet-4-6
+          temperature: 0.2
+          max-tokens: 1024
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: probity  # labels every metric with app=probity in Grafana
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+sendgrid:
+  api-key: ${SENDGRID_API_KEY}
+  from-email: ${FROM_EMAIL:server@probity.com}
+
+logging:
+  level:
+    org.springframework.data.redis: WARN
+    io.lettuce.core: WARN
+    io.lettuce.core.protocol: WARN

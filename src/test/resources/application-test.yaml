@@ -1,0 +1,25 @@
+spring:
+  docker:
+    compose:
+      enabled: false
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+
+probity:
+  jwt:
+    secret: J7d3kK29a91Lx8m4P2sQ6tUvWxYzA1B3C5D7E9F0G2H4I6J8K
+  app:
+    base-url: http://localhost:8080
+
+sendgrid:
+  api-key: test-key
+  from-email: test@probity.com
+
+logging:
+  level:
+    org.springframework.data.redis: WARN
+    io.lettuce.core: WARN
+    io.lettuce.core.protocol: WARN
+    org.springframework.context.annotation: DEBUG
