@@ -41,6 +41,9 @@ public class Portfolio extends BaseEntitySoftDelete {
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
 
+    @Column(length = 500)
+    private String description;
+
     @OneToMany(
             mappedBy = "portfolio",
             cascade = CascadeType.ALL,
@@ -61,7 +64,17 @@ public class Portfolio extends BaseEntitySoftDelete {
         return p;
     }
 
+    public static Portfolio create(String name, UUID userId, String description) {
+        Portfolio p = create(name, userId);
+        p.description = description;
+        return p;
+    }
 
+
+    /**
+     * Adds a position to the portfolio, merging with existing position if asset already held.
+     * Enforces strictly positive quantity invariant.
+     */
     public PortfolioPosition addPosition(Asset asset, BigDecimal quantity, BigDecimal price) {
         Objects.requireNonNull(asset, "asset must not be null");
         requirePositiveQuantity(quantity, "addPosition");
@@ -80,6 +93,20 @@ public class Portfolio extends BaseEntitySoftDelete {
                 });
     }
 
+    /**
+     * Updates portfolio name and description, enforcing non-blank name invariant.
+     */
+    public void update(String newName, String description) {
+        Objects.requireNonNull(newName, "name must not be null");
+        if (newName.isBlank()) throw new IllegalArgumentException("Portfolio name must not be blank");
+        this.name = newName.trim();
+        this.description = description;
+    }
+
+    /**
+     * Updates the quantity of an existing position by ID.
+     * Enforces strictly positive quantity invariant.
+     */
     public void updatePositionQuantity(UUID positionId, BigDecimal newQuantity, BigDecimal price) {
         requirePositiveQuantity(newQuantity, "updatePositionQuantity");
 
@@ -94,6 +121,9 @@ public class Portfolio extends BaseEntitySoftDelete {
         position.adjustQuantity(delta, price);
     }
 
+    /**
+     * Removes a position from the portfolio by ID.
+     */
     public void removePosition(UUID positionId) {
         PortfolioPosition position = positions.stream()
                 .filter(p -> p.getId().equals(positionId))
@@ -105,6 +135,11 @@ public class Portfolio extends BaseEntitySoftDelete {
         positions.remove(position);
     }
 
+    /**
+     * Reduces the quantity of a position for a given asset.
+     * Removes the position entirely if quantity reaches zero.
+     * Enforces strictly positive quantity invariant.
+     */
     public void reducePosition(Asset asset, BigDecimal quantity, BigDecimal price) {
         Objects.requireNonNull(asset, "asset must not be null");
         requirePositiveQuantity(quantity, "reducePosition");
@@ -122,6 +157,9 @@ public class Portfolio extends BaseEntitySoftDelete {
         }
     }
 
+    /**
+     * Updates the portfolio name, enforcing non-blank invariant.
+     */
     public void rename(String newName) {
         Objects.requireNonNull(newName, "name must not be null");
         if (newName.isBlank()) throw new IllegalArgumentException("Portfolio name must not be blank");

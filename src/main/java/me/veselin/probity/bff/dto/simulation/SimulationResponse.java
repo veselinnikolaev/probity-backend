@@ -6,9 +6,9 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * BFF response DTO exposing persisted simulation results to the client.
+ * BFF response DTO for simulation HTTP responses.
  */
-public record SimulationResultDto(
+public record SimulationResponse(
         String id,
         String portfolioId,
         String createdAt,
@@ -41,4 +41,3 @@ public record SimulationResultDto(
             double conditionalValueAtRisk95
     ) {}
 }
-

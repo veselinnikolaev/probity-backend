@@ -15,8 +15,7 @@ import me.veselin.probity.risk.port.RiskPort;
 import me.veselin.probity.simulation.domain.Simulation;
 import me.veselin.probity.simulation.domain.SimulationPayload;
 import me.veselin.probity.simulation.domain.SimulationPayload.*;
-import me.veselin.probity.bff.dto.simulation.RunSimulationRequest;
-import me.veselin.probity.bff.dto.simulation.SimulationResultDto;
+import me.veselin.probity.simulation.dto.SimulationData;
 import me.veselin.probity.portfolio.service.portfolio.PortfolioValuationService;
 import me.veselin.probity.simulation.exception.EmptyPortfolioException;
 import me.veselin.probity.simulation.exception.SimulationNotFoundException;
@@ -110,15 +109,15 @@ public class MonteCarloSimulationService {
     /**
      * Executes a new simulation run for a user-owned portfolio and persists its payload.
      */
-    public SimulationResultDto run(RunSimulationRequest request, UUID userId) {
+    public SimulationData run(UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId) {
         log.info("Running Monte Carlo simulation portfolioId={} userId={} paths={} horizon={}d",
-                request.portfolioId(), userId, request.numberOfSimulations(), request.timeHorizonDays());
+                portfolioId, userId, numberOfSimulations, timeHorizonDays);
 
-        SimulationContext context = loadAndValidatePortfolio(request, userId);
-        SimulationParameters params = prepareSimulationParameters(context.positions(), request);
-        SimulationPayload payload = executeSimulationRun(context, params, request);
+        SimulationContext context = loadAndValidatePortfolio(portfolioId, userId);
+        SimulationParameters params = prepareSimulationParameters(context.positions(), assumedReturnPercent, assumedVolatilityPercent);
+        SimulationPayload payload = executeSimulationRun(context, params, numberOfSimulations, timeHorizonDays, confidenceLevel);
 
-        Simulation saved = persistResults(request, userId, context.currentValue(), payload, request.numberOfSimulations(), request.timeHorizonDays());
+        Simulation saved = persistResults(portfolioId, userId, context.currentValue(), payload, numberOfSimulations, timeHorizonDays, confidenceLevel, assumedReturnPercent, assumedVolatilityPercent);
 
         log.info("Simulation saved id={}", saved.getId());
         return simulationMapper.toDto(saved);
@@ -127,13 +126,13 @@ public class MonteCarloSimulationService {
     /**
      * Loads and validates the portfolio for simulation.
      */
-    private SimulationContext loadAndValidatePortfolio(RunSimulationRequest request, UUID userId) {
-        Portfolio portfolio = portfolioQueryPort.loadPortfolioWithPositions(request.portfolioId(), userId);
+    private SimulationContext loadAndValidatePortfolio(UUID portfolioId, UUID userId) {
+        Portfolio portfolio = portfolioQueryPort.loadPortfolioWithPositions(portfolioId, userId);
         List<PortfolioPosition> positions = portfolio.getPositions();
 
         if (positions.isEmpty()) {
             throw new EmptyPortfolioException(
-                    "Portfolio %s has no positions — cannot run simulation".formatted(request.portfolioId()));
+                    "Portfolio %s has no positions — cannot run simulation".formatted(portfolioId));
         }
 
         BigDecimal currentValue = computeCurrentValue(positions);
@@ -149,8 +148,8 @@ public class MonteCarloSimulationService {
     /**
      * Prepares simulation parameters from portfolio data and request overrides.
      */
-    private SimulationParameters prepareSimulationParameters(List<PortfolioPosition> positions, RunSimulationRequest request) {
-        double[] params = deriveParameters(positions, request);
+    private SimulationParameters prepareSimulationParameters(List<PortfolioPosition> positions, Double assumedReturnPercent, Double assumedVolatilityPercent) {
+        double[] params = deriveParameters(positions, assumedReturnPercent, assumedVolatilityPercent);
         double dailyReturn = params[0];
         double dailyVolatility = params[1];
 
@@ -161,23 +160,21 @@ public class MonteCarloSimulationService {
     /**
      * Executes the Monte Carlo simulation run and builds the payload.
      */
-    private SimulationPayload executeSimulationRun(SimulationContext context, SimulationParameters params, RunSimulationRequest request) {
-        int n = request.numberOfSimulations();
-        int days = request.timeHorizonDays();
+    private SimulationPayload executeSimulationRun(SimulationContext context, SimulationParameters params, int numberOfSimulations, int timeHorizonDays, double confidenceLevel) {
         double currentValueDouble = context.currentValue().doubleValue();
 
         // Run GBM paths in parallel using dedicated executor
-        double[][] paths = runParallelPaths(n, days, currentValueDouble, params.dailyReturn(), params.dailyVolatility());
+        double[][] paths = runParallelPaths(numberOfSimulations, timeHorizonDays, currentValueDouble, params.dailyReturn(), params.dailyVolatility());
 
         // Compute statistics and outcomes
-        double[] finalValues = extractAndSortFinalValues(paths, n, days);
+        double[] finalValues = extractAndSortFinalValues(paths, numberOfSimulations, timeHorizonDays);
         Statistics statistics = computeStatistics(finalValues);
-        Outcomes outcomes = computeOutcomes(finalValues, currentValueDouble, n, request.confidenceLevel());
+        Outcomes outcomes = computeOutcomes(finalValues, currentValueDouble, numberOfSimulations, confidenceLevel);
 
         // Convert to domain objects for payload
-        List<SimulatedPath> allPaths = convertPathsToDomain(paths, n);
-        List<PercentileSeries> percentileSeries = buildPercentileSeries(allPaths, finalValues, currentValueDouble, days);
-        List<DistributionBucket> distribution = buildDistribution(finalValues, n);
+        List<SimulatedPath> allPaths = convertPathsToDomain(paths, numberOfSimulations);
+        List<PercentileSeries> percentileSeries = buildPercentileSeries(allPaths, finalValues, currentValueDouble, timeHorizonDays);
+        List<DistributionBucket> distribution = buildDistribution(finalValues, numberOfSimulations);
 
         return new SimulationPayload(statistics, outcomes, percentileSeries, allPaths, distribution);
     }
@@ -224,17 +221,17 @@ public class MonteCarloSimulationService {
     /**
      * Persists the simulation results to the database.
      */
-    private Simulation persistResults(RunSimulationRequest request, UUID userId, BigDecimal currentValue,
-                                     SimulationPayload payload, int n, int days) {
+    private Simulation persistResults(UUID portfolioId, UUID userId, BigDecimal currentValue,
+                                     SimulationPayload payload, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent) {
         return simulationRepository.save(
                 Simulation.builder()
-                        .portfolioId(request.portfolioId())
+                        .portfolioId(portfolioId)
                         .userId(userId)
-                        .numberOfSimulations(n)
-                        .timeHorizonDays(days)
-                        .confidenceLevel(request.confidenceLevel())
-                        .assumedReturnPct(request.assumedReturnPercent())
-                        .assumedVolatilityPct(request.assumedVolatilityPercent())
+                        .numberOfSimulations(numberOfSimulations)
+                        .timeHorizonDays(timeHorizonDays)
+                        .confidenceLevel(confidenceLevel)
+                        .assumedReturnPct(assumedReturnPercent)
+                        .assumedVolatilityPct(assumedVolatilityPercent)
                         .currentPortfolioValue(currentValue)
                         .resultPayload(payload)
                         .build()
@@ -255,7 +252,7 @@ public class MonteCarloSimulationService {
     /**
      * Loads a single simulation result owned by the requesting user.
      */
-    public SimulationResultDto get(UUID simulationId, UUID userId) {
+    public SimulationData get(UUID simulationId, UUID userId) {
         Simulation simulation = simulationRepository.findByIdAndUserId(simulationId, userId)
                 .orElseThrow(() -> new SimulationNotFoundException(
                         "Simulation not found: " + simulationId));
@@ -266,7 +263,7 @@ public class MonteCarloSimulationService {
     /**
      * Lists simulations previously run for a portfolio by the requesting user.
      */
-    public List<SimulationResultDto> listForPortfolio(UUID portfolioId, UUID userId) {
+    public List<SimulationData> listForPortfolio(UUID portfolioId, UUID userId) {
         // Ownership of the portfolio is implicitly enforced: we only return
         // rows where user_id matches — no separate portfolio auth needed.
         return simulationRepository
@@ -320,14 +317,14 @@ public class MonteCarloSimulationService {
      * Uses caller overrides when present; otherwise derives from 90 days of market data.
      */
     private double[] deriveParameters(List<PortfolioPosition> positions,
-                                      RunSimulationRequest request) {
+                                      Double assumedReturnPercent, Double assumedVolatilityPercent) {
 
-        boolean hasReturnOverride = request.assumedReturnPercent() != null;
-        boolean hasVolOverride = request.assumedVolatilityPercent() != null;
+        boolean hasReturnOverride = assumedReturnPercent != null;
+        boolean hasVolOverride = assumedVolatilityPercent != null;
 
         if (hasReturnOverride && hasVolOverride) {
-            double annualReturn = request.assumedReturnPercent() / 100.0;
-            double annualVol = request.assumedVolatilityPercent() / 100.0;
+            double annualReturn = assumedReturnPercent / 100.0;
+            double annualVol = assumedVolatilityPercent / 100.0;
             double tradingDays = tradingConfig.getTradingDaysPerYear();
             return new double[]{annualReturn / tradingDays, annualVol / Math.sqrt(tradingDays)};
         }
@@ -354,7 +351,7 @@ public class MonteCarloSimulationService {
 
         double tradingDays = tradingConfig.getTradingDaysPerYear();
         double annualReturn = hasReturnOverride
-                ? request.assumedReturnPercent() / 100.0
+                ? assumedReturnPercent / 100.0
                 : portfolioReturns.stream().mapToDouble(Double::doubleValue).average().orElse(0.0) * tradingDays;
 
         log.info("annualVol={} annualReturn={} dailyReturn={} dailyVol={}",
@@ -363,7 +360,7 @@ public class MonteCarloSimulationService {
                 annualVol / Math.sqrt(tradingDays));
 
         double useVol = hasVolOverride
-                ? request.assumedVolatilityPercent() / 100.0
+                ? assumedVolatilityPercent / 100.0
                 : annualVol;
 
         return new double[]{annualReturn / tradingDays, useVol / Math.sqrt(tradingDays)};

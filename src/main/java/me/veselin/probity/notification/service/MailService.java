@@ -1,4 +1,4 @@
-package me.veselin.probity.auth.service;
+package me.veselin.probity.notification.service;
 
 import com.sendgrid.Method;
 import com.sendgrid.Request;
@@ -9,6 +9,7 @@ import com.sendgrid.helpers.mail.objects.Content;
 import com.sendgrid.helpers.mail.objects.Email;
 import lombok.RequiredArgsConstructor;
 import me.veselin.probity.auth.exception.EmailSendException;
+import me.veselin.probity.notification.port.NotificationPort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -16,13 +17,14 @@ import java.io.IOException;
 
 @Service
 @RequiredArgsConstructor
-public class MailService {
+public class MailService implements NotificationPort {
 
     private final SendGrid sendGrid;
 
     @Value("${sendgrid.from-email}")
     private String fromEmail;
 
+    @Override
     public void sendEmail(String to, String subject, String content, String contentType) {
         Email from = new Email(fromEmail);
         Email recipient = new Email(to);

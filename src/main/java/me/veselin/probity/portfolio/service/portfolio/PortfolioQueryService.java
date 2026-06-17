@@ -15,6 +15,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +49,19 @@ public class PortfolioQueryService implements PortfolioQueryPort {
             throw new AccessDeniedException("Access denied to portfolio: " + id);
         }
         return portfolio;
+    }
+
+    @Override
+    public Instant getLastModified(UUID portfolioId, UUID userId) {
+        Portfolio portfolio = portfolioRepository.findById(portfolioId)
+                .orElseThrow(() -> new PortfolioNotFoundException(
+                        "Portfolio not found: " + portfolioId));
+
+        if (!portfolio.getUserId().equals(userId)) {
+            throw new AccessDeniedException("Access denied to portfolio: " + portfolioId);
+        }
+
+        return portfolio.getUpdatedAt();
     }
 
     // ── Portfolios list ───────────────────────────────────────────────────────

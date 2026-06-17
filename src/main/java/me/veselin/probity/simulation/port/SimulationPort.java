@@ -1,15 +1,14 @@
 package me.veselin.probity.simulation.port;
 
-import me.veselin.probity.bff.dto.simulation.RunSimulationRequest;
-import me.veselin.probity.bff.dto.simulation.SimulationResultDto;
+import me.veselin.probity.simulation.dto.SimulationData;
 
 import java.util.List;
 import java.util.UUID;
 
 public interface SimulationPort {
-    SimulationResultDto runSimulation(RunSimulationRequest request, UUID userId);
+    SimulationData runSimulation(UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId);
 
-    SimulationResultDto getSimulation(UUID simulationId, UUID userId);
+    SimulationData getSimulation(UUID simulationId, UUID userId);
 
-    List<SimulationResultDto> listSimulations(UUID portfolioId, UUID userId);
+    List<SimulationData> listSimulations(UUID portfolioId, UUID userId);
 }

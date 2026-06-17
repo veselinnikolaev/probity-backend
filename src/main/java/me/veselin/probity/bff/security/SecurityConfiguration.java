@@ -28,12 +28,18 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
+/**
+ * Spring Security configuration for JWT-based authentication and CSRF protection.
+ */
 public class SecurityConfiguration {
     @Value("${probity.cors.allowed-origins}")
     private String allowedOrigins;
 
-    @Value("${probity.cookie.samesite}")
+    @Value("${probity.cookie.same-site}")
     private String sameSite;
+
+    @Value("${probity.cookie.secure}")
+    private Boolean secure;
 
     @Value("${probity.jwt.secret}")
     private String jwtSecret;
@@ -45,8 +51,8 @@ public class SecurityConfiguration {
     public void validateConfiguration() {
         if (jwtSecret == null || jwtSecret.isBlank()) {
             throw new IllegalStateException(
-                "JWT secret must be configured via JWT_SECRET environment variable. " +
-                "Application cannot start without a valid JWT secret for security reasons."
+                    "JWT secret must be configured via JWT_SECRET environment variable. " +
+                            "Application cannot start without a valid JWT secret for security reasons."
             );
         }
     }
@@ -57,7 +63,7 @@ public class SecurityConfiguration {
                 .headers(headers -> headers.contentTypeOptions(Customizer.withDefaults()))
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository())
-                        .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                        .csrfTokenRequestHandler(csrfRequestHandler())
                         .ignoringRequestMatchers(
                                 ApiRoutes.Auth.LOGIN,
                                 ApiRoutes.Auth.REGISTER,
@@ -81,7 +87,11 @@ public class SecurityConfiguration {
                                 ApiRoutes.Auth.RESEND_VERIFICATION,
                                 "/actuator/health",
                                 "/actuator/prometheus",
-                                "/error"
+                                "/error",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/api-docs",
+                                "/api-docs/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
@@ -92,12 +102,19 @@ public class SecurityConfiguration {
     }
 
     @Bean
+    public CsrfTokenRequestAttributeHandler csrfRequestHandler() {
+        CsrfTokenRequestAttributeHandler handler = new CsrfTokenRequestAttributeHandler();
+        handler.setCsrfRequestAttributeName(null); // disables deferred loading
+        return handler;
+    }
+
+    @Bean
     public CookieCsrfTokenRepository csrfTokenRepository() {
         CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepo.setCookieCustomizer(cookie -> cookie
                 .path("/")
                 .sameSite(sameSite)
-                .secure(true)
+                .secure(secure)
                 .httpOnly(false)
                 .maxAge(3600L));
         return csrfRepo;
@@ -110,16 +127,26 @@ public class SecurityConfiguration {
         config.setAllowedOrigins(
                 Arrays.stream(allowedOrigins.split(","))
                         .map(String::trim)
-                        .toList()
-        );
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-XSRF-TOKEN"));
-        config.setExposedHeaders(List.of("X-XSRF-TOKEN", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Retry-After"));
+                        .toList());
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "X-Requested-With",
+                "If-None-Match",
+                "If-Modified-Since",
+                "X-XSRF-TOKEN"
+        ));
+        config.setExposedHeaders(List.of(
+                "ETag",
+                "Last-Modified",
+                "X-RateLimit-Remaining"
+        ));
         config.setAllowCredentials(true);
+        config.setMaxAge(3600L); // cache preflight for 1 hour
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-
+        source.registerCorsConfiguration("/api/**", config);
         return source;
     }
 

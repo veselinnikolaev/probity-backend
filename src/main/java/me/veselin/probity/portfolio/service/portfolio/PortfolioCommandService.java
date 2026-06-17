@@ -2,15 +2,15 @@ package me.veselin.probity.portfolio.service.portfolio;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import me.veselin.probity.bff.dto.portfolio.PortfolioCreatedDto;
 import me.veselin.probity.bff.dto.portfolio.PositionCreateRequest;
-import me.veselin.probity.bff.dto.portfolio.PositionCreatedDto;
 import me.veselin.probity.bff.dto.portfolio.PositionUpdateRequest;
 import me.veselin.probity.common.exception.ConflictException;
 import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.portfolio.domain.Asset;
 import me.veselin.probity.portfolio.domain.Portfolio;
 import me.veselin.probity.portfolio.domain.PortfolioPosition;
+import me.veselin.probity.portfolio.dto.PortfolioData;
+import me.veselin.probity.portfolio.dto.PositionCreatedDto;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
 import me.veselin.probity.portfolio.exception.PositionNotFoundException;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioCommandPort;
@@ -40,12 +40,12 @@ public class PortfolioCommandService implements PortfolioCommandPort {
      * Creates a portfolio for a user while enforcing unique portfolio names per owner.
      */
     @Override
-    public PortfolioCreatedDto create(String name, UUID userId) {
+    public PortfolioData create(String name, UUID userId) {
         if (portfolioRepository.existsByNameAndUserId(name, userId)) {
             throw new ConflictException("Portfolio '" + name + "' already exists");
         }
         Portfolio saved = portfolioRepository.save(Portfolio.create(name, userId));
-        return new PortfolioCreatedDto(saved.getId().toString(), saved.getName());
+        return new PortfolioData(saved.getId().toString(), saved.getName(), saved.getDescription());
     }
 
     /**
@@ -120,6 +120,38 @@ public class PortfolioCommandService implements PortfolioCommandPort {
         }
 
         portfolio.removePosition(positionId);
+        portfolioRepository.save(portfolio);
+    }
+
+    @Override
+    public PortfolioData update(UUID portfolioId, UUID userId, String name, String description) {
+        Portfolio portfolio = portfolioRepository.findById(portfolioId)
+                .orElseThrow(() -> new PortfolioNotFoundException("Portfolio not found: " + portfolioId));
+
+        if (!portfolio.getUserId().equals(userId)) {
+            throw new AccessDeniedException("Access denied to portfolio: " + portfolioId);
+        }
+
+        boolean nameChanged = !portfolio.getName().equalsIgnoreCase(name.trim());
+        if (nameChanged && portfolioRepository.existsByNameAndUserId(name.trim(), userId)) {
+            throw new ConflictException("Portfolio '" + name.trim() + "' already exists");
+        }
+
+        portfolio.update(name, description);
+        Portfolio saved = portfolioRepository.save(portfolio);
+        return new PortfolioData(saved.getId().toString(), saved.getName(), saved.getDescription());
+    }
+
+    @Override
+    public void delete(UUID portfolioId, UUID userId) {
+        Portfolio portfolio = portfolioRepository.findById(portfolioId)
+                .orElseThrow(() -> new PortfolioNotFoundException("Portfolio not found: " + portfolioId));
+
+        if (!portfolio.getUserId().equals(userId)) {
+            throw new AccessDeniedException("Access denied to portfolio: " + portfolioId);
+        }
+
+        portfolio.softDelete();
         portfolioRepository.save(portfolio);
     }
 }

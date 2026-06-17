@@ -2,8 +2,7 @@ package me.veselin.probity.simulation.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import me.veselin.probity.bff.dto.simulation.RunSimulationRequest;
-import me.veselin.probity.bff.dto.simulation.SimulationResultDto;
+import me.veselin.probity.simulation.dto.SimulationData;
 import me.veselin.probity.simulation.port.SimulationPort;
 import org.springframework.stereotype.Service;
 
@@ -25,14 +24,18 @@ public class SimulationApplicationService implements SimulationPort {
     /**
      * Executes a new Monte Carlo simulation for a user-owned portfolio.
      *
-     * @param request the simulation request parameters
+     * @param portfolioId the portfolio ID
+     * @param numberOfSimulations number of simulation paths
+     * @param timeHorizonDays time horizon in days
+     * @param confidenceLevel confidence level for VaR calculation
+     * @param assumedReturnPercent optional assumed return override
+     * @param assumedVolatilityPercent optional assumed volatility override
      * @param userId the authenticated user's ID
      * @return the simulation result with persisted payload
      */
-    public SimulationResultDto runSimulation(RunSimulationRequest request, UUID userId) {
-        log.info("Application service: running simulation portfolioId={} userId={}", 
-                request.portfolioId(), userId);
-        return monteCarloSimulationService.run(request, userId);
+    public SimulationData runSimulation(UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId) {
+        log.info("Application service: running simulation portfolioId={} userId={}", portfolioId, userId);
+        return monteCarloSimulationService.run(portfolioId, numberOfSimulations, timeHorizonDays, confidenceLevel, assumedReturnPercent, assumedVolatilityPercent, userId);
     }
 
     /**
@@ -42,7 +45,7 @@ public class SimulationApplicationService implements SimulationPort {
      * @param userId the authenticated user's ID
      * @return the simulation result
      */
-    public SimulationResultDto getSimulation(UUID simulationId, UUID userId) {
+    public SimulationData getSimulation(UUID simulationId, UUID userId) {
         log.debug("Application service: retrieving simulation id={} userId={}", simulationId, userId);
         return monteCarloSimulationService.get(simulationId, userId);
     }
@@ -54,7 +57,7 @@ public class SimulationApplicationService implements SimulationPort {
      * @param userId the authenticated user's ID
      * @return list of simulation results
      */
-    public List<SimulationResultDto> listSimulations(UUID portfolioId, UUID userId) {
+    public List<SimulationData> listSimulations(UUID portfolioId, UUID userId) {
         log.debug("Application service: listing simulations portfolioId={} userId={}", portfolioId, userId);
         return monteCarloSimulationService.listForPortfolio(portfolioId, userId);
     }

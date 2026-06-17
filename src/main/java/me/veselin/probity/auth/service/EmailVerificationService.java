@@ -1,11 +1,13 @@
 package me.veselin.probity.auth.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.auth.enumeration.UserStatus;
 import me.veselin.probity.auth.domain.User;
 import me.veselin.probity.auth.exception.UnauthorizedException;
 import me.veselin.probity.auth.port.EmailVerificationPort;
 import me.veselin.probity.auth.repository.UserRepository;
+import me.veselin.probity.notification.port.NotificationPort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -14,10 +16,14 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
+/**
+ * Service for email verification workflows using Redis for token storage.
+ */
 public class EmailVerificationService implements EmailVerificationPort {
     private final RedisTemplate<String, String> redisTemplate;
-    private final MailService mailService;
+    private final NotificationPort notificationPort;
     private final UserRepository userRepository;
 
     @Value("${probity.verify.email.prefix}")
@@ -32,9 +38,13 @@ public class EmailVerificationService implements EmailVerificationPort {
     @Value("${probity.verify.user.max-retries}")
     private int maxTokenRetries;
 
-    @Value("${probity.app.base-url}")
-    private String appBaseUrl;
+    @Value("${probity.app.frontend-url}")
+    private String frontendUrl;
 
+    /**
+     * Sends a verification email to the specified address.
+     * Silently no-ops if the account is already active.
+     */
     @Override
     public void sendVerificationEmail(String email) {
         User user = userRepository.findByEmail(email)
@@ -42,6 +52,10 @@ public class EmailVerificationService implements EmailVerificationPort {
         sendVerificationEmailForUser(user);
     }
 
+    /**
+     * Verifies a user's email address using a token sent via email.
+     * Invalidates the token after successful verification.
+     */
     @Override
     public void verify(String token) {
         String key = verifyEmailPrefix + token;
@@ -61,6 +75,10 @@ public class EmailVerificationService implements EmailVerificationPort {
         redisTemplate.delete(verifyUserPrefix + userId);
     }
 
+    /**
+     * Resends the verification email for an unverified account.
+     * Silently no-ops if the account is already active.
+     */
     @Override
     public void resendVerification(String email) {
         User user = userRepository.findByEmail(email)
@@ -74,10 +92,16 @@ public class EmailVerificationService implements EmailVerificationPort {
         sendVerificationEmailForUser(user);
     }
 
+    /**
+     * Generates a unique verification token and sends it via email.
+     * Uses Redis setIfAbsent to prevent token collisions with retry loop.
+     * TTL ensures tokens expire automatically after configured duration.
+     */
     private void sendVerificationEmailForUser(User user) {
         String userTokenKey = verifyUserPrefix + user.getId();
         String token = null;
 
+        // Retry loop: generate random UUIDs until we find one not already in Redis
         for (int attempt = 0; attempt < maxTokenRetries; attempt++) {
             String candidate = UUID.randomUUID().toString();
             String key = verifyEmailPrefix + candidate;
@@ -95,13 +119,17 @@ public class EmailVerificationService implements EmailVerificationPort {
             throw new IllegalStateException("Failed to generate unique verification token after " + maxTokenRetries + " attempts");
         }
 
+        // Store reverse mapping: userId -> token for cleanup on resend
         redisTemplate.opsForValue()
                 .set(userTokenKey, token, verifyEmailExpirationSeconds, TimeUnit.SECONDS);
 
         String firstName = user.getFirstName() != null ? user.getFirstName() : "there";
-        mailService.sendEmail(user.getEmail(), "Verify your Probity account", buildHtml(firstName, token), "text/html");
+        notificationPort.sendEmail(user.getEmail(), "Verify your Probity account", buildHtml(firstName, token), "text/html");
     }
 
+    /**
+     * Deletes existing verification tokens for a user to prevent token reuse on resend.
+     */
     private void deleteExistingTokenForUser(String userId) {
         String userTokenKey = verifyUserPrefix + userId;
         String existingToken = redisTemplate.opsForValue().get(userTokenKey);
@@ -113,7 +141,7 @@ public class EmailVerificationService implements EmailVerificationPort {
     }
 
     private String buildHtml(String firstName, String token) {
-        String link = appBaseUrl + "/verify?token=" + token;
+        String link = frontendUrl + "/verify?token=" + token;
         return """
                 <p>Hi %s,</p>
                 <p>Click the button below to verify your Probity account. This link expires in 24 hours.</p>

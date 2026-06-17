@@ -2,7 +2,7 @@ package me.veselin.probity.simulation.mapper;
 
 import me.veselin.probity.simulation.domain.Simulation;
 import me.veselin.probity.simulation.domain.SimulationPayload;
-import me.veselin.probity.bff.dto.simulation.SimulationResultDto;
+import me.veselin.probity.simulation.dto.SimulationData;
 import org.springframework.stereotype.Component;
 
 import java.time.format.DateTimeFormatter;
@@ -12,7 +12,7 @@ public class SimulationMapper {
 
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT;
 
-    public SimulationResultDto toDto(Simulation simulation) {
+    public SimulationData toDto(Simulation simulation) {
         SimulationPayload p = simulation.getResultPayload();
 
         // BaseEntity.createdAt is Instant — format as ISO-8601 UTC string
@@ -20,11 +20,11 @@ public class SimulationMapper {
                 ? ISO_FORMATTER.format(simulation.getCreatedAt())
                 : null;
 
-        return new SimulationResultDto(
+        return new SimulationData(
                 simulation.getId().toString(),
                 simulation.getPortfolioId().toString(),
                 createdAt,
-                new SimulationResultDto.Parameters(
+                new SimulationData.Parameters(
                         simulation.getNumberOfSimulations(),
                         simulation.getTimeHorizonDays(),
                         simulation.getConfidenceLevel()
@@ -32,14 +32,14 @@ public class SimulationMapper {
                 simulation.getCurrentPortfolioValue(),
                 p.allPaths(),
                 p.percentileSeries(),
-                new SimulationResultDto.Statistics(
+                new SimulationData.Statistics(
                         p.statistics().expectedFinalValue(),
                         p.statistics().medianFinalValue(),
                         p.statistics().stdDeviation(),
                         p.statistics().minValue(),
                         p.statistics().maxValue()
                 ),
-                new SimulationResultDto.Outcomes(
+                new SimulationData.Outcomes(
                         p.outcomes().probabilityOf10PercentLoss(),
                         p.outcomes().probabilityOf20PercentLoss(),
                         p.outcomes().valueAtRisk95(),

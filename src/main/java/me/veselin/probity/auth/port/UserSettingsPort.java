@@ -1,22 +1,24 @@
 package me.veselin.probity.auth.port;
 
-import me.veselin.probity.bff.dto.settings.*;
+import me.veselin.probity.auth.dto.PreferencesData;
+import me.veselin.probity.auth.dto.ProfileData;
+import me.veselin.probity.auth.dto.SessionData;
 
 import java.util.List;
 import java.util.UUID;
 
 public interface UserSettingsPort {
-    ProfileResponse getProfile(UUID id);
+    ProfileData getProfile(UUID id);
 
-    ProfileResponse updateProfile(UUID id, UpdateProfileRequest request);
+    ProfileData updateProfile(UUID id, String firstName, String lastName);
 
-    void changePassword(UUID id, ChangePasswordRequest request);
+    void changePassword(UUID id, String currentPassword, String newPassword, String confirmPassword);
 
-    PreferencesResponse getPreferences(UUID id);
+    PreferencesData getPreferences(UUID id);
 
-    PreferencesResponse updatePreferences(UUID id, UpdatePreferencesRequest request);
+    PreferencesData updatePreferences(UUID id, String defaultCurrency, int defaultConfidenceLevel, String defaultTimeHorizon);
 
-    List<SessionResponse> getActiveSessions(UUID id);
+    List<SessionData> getActiveSessions(UUID id);
 
     void revokeSession(UUID id, String sessionId);
 

@@ -57,6 +57,10 @@ public class PortfolioPosition extends BaseEntitySoftDelete {
     }
 
 
+    /**
+     * Adjusts position quantity by delta and recalculates weighted-average cost on buys.
+     * Enforces strictly positive quantity invariant.
+     */
     void adjustQuantity(BigDecimal delta, BigDecimal price) {
         BigDecimal newQty = this.quantity.add(delta);
 

@@ -18,8 +18,11 @@ public class CookieService {
     @Value("${probity.jwt.refresh.expiration.seconds}")
     private long refreshExpirationTime;
 
-    @Value("${probity.cookie.samesite}")
+    @Value("${probity.cookie.same-site}")
     private String sameSite;
+
+    @Value("${probity.cookie.secure}")
+    private Boolean secure;
 
     /**
      * Builds the secure access-token cookie returned after successful authentication.
@@ -27,7 +30,7 @@ public class CookieService {
     public ResponseCookie buildAccessCookie(String token) {
         return ResponseCookie.from(Token.ACCESS.getCookieName(), token)
                 .httpOnly(true)
-                .secure(true)
+                .secure(secure)
                 .path("/")
                 .maxAge(Duration.ofSeconds(accessExpirationTime))
                 .sameSite(sameSite)
@@ -40,7 +43,7 @@ public class CookieService {
     public ResponseCookie buildRefreshCookie(String token) {
         return ResponseCookie.from(Token.REFRESH.getCookieName(), token)
                 .httpOnly(true)
-                .secure(true)
+                .secure(secure)
                 .path(ApiRoutes.Auth.REFRESH)  // only sent to /refresh — not every request
                 .maxAge(Duration.ofSeconds(refreshExpirationTime))
                 .sameSite(sameSite)
@@ -52,7 +55,7 @@ public class CookieService {
      */
     public ResponseCookie clearAccessCookie() {
         return ResponseCookie.from(Token.ACCESS.getCookieName(), "")
-                .httpOnly(true).secure(true).path("/").maxAge(0).build();
+                .httpOnly(true).secure(secure).path("/").maxAge(0).build();
     }
 
     /**
@@ -60,6 +63,6 @@ public class CookieService {
      */
     public ResponseCookie clearRefreshCookie() {
         return ResponseCookie.from(Token.REFRESH.getCookieName(), "")
-                .httpOnly(true).secure(true).path(ApiRoutes.Auth.REFRESH).maxAge(0).build();
+                .httpOnly(true).secure(secure).path(ApiRoutes.Auth.REFRESH).maxAge(0).build();
     }
 }

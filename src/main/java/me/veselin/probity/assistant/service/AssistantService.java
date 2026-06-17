@@ -15,6 +15,9 @@ import java.util.UUID;
 
 @Service
 @Slf4j
+/**
+ * Service for AI-powered portfolio risk analysis assistant.
+ */
 public class AssistantService implements AssistantPort {
 
     private static final String SYSTEM_PROMPT = """
@@ -34,6 +37,10 @@ public class AssistantService implements AssistantPort {
 
     private final ChatClient chatClient;
 
+    /**
+     * Configures the AI advisor with memory persistence and portfolio tools.
+     * Sets up three-step advisor configuration: memory rules, global registration, and per-request conversation ID.
+     */
     public AssistantService(ChatClient.Builder builder, PortfolioTools portfolioTools,
                             RedisChatMemoryRepository chatMemoryRepository,
                             @Value("${probity.assistant.chat-memory.max-messages:20}") int maxChatMemoryMessages) {
@@ -52,6 +59,10 @@ public class AssistantService implements AssistantPort {
                 .build();
     }
 
+    /**
+     * Processes a user message through the AI assistant with portfolio tool access.
+     * Uses conversation ID to maintain per-user chat history in Redis.
+     */
     @Override
     public String chat(UUID userId, String message) {
         log.debug("Assistant chat userId={}", userId);

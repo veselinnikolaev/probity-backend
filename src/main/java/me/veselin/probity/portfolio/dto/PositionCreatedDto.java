@@ -1,4 +1,4 @@
-package me.veselin.probity.bff.dto.portfolio;
+package me.veselin.probity.portfolio.dto;
 
 import java.math.BigDecimal;
 

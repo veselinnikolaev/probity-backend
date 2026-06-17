@@ -9,7 +9,9 @@ import me.veselin.probity.auth.jwt.JwtService;
 import me.veselin.probity.auth.port.UserSettingsPort;
 import me.veselin.probity.auth.repository.UserPreferencesRepository;
 import me.veselin.probity.auth.repository.UserRepository;
-import me.veselin.probity.bff.dto.settings.*;
+import me.veselin.probity.auth.dto.PreferencesData;
+import me.veselin.probity.auth.dto.ProfileData;
+import me.veselin.probity.auth.dto.SessionData;
 import me.veselin.probity.common.exception.ConflictException;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -46,36 +48,36 @@ public class UserSettingsService implements UserSettingsPort {
     // ─── Profile ──────────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public ProfileResponse getProfile(UUID userId) {
+    public ProfileData getProfile(UUID userId) {
         User user = requireUser(userId);
-        return toProfileResponse(user);
+        return toProfileData(user);
     }
 
     @Transactional
     @CacheEvict(cacheNames = "user", key = "#userId")
-    public ProfileResponse updateProfile(UUID userId, UpdateProfileRequest request) {
+    public ProfileData updateProfile(UUID userId, String firstName, String lastName) {
         User user = requireUser(userId);
-        user.updateProfile(request.firstName(), request.lastName());
+        user.updateProfile(firstName, lastName);
         userRepository.save(user);
         log.info("Profile updated for user {}", userId);
-        return toProfileResponse(user);
+        return toProfileData(user);
     }
 
     // ─── Password ─────────────────────────────────────────────────────────────
 
     @Transactional
-    public void changePassword(UUID userId, ChangePasswordRequest request) {
-        if (!request.newPassword().equals(request.confirmPassword())) {
+    public void changePassword(UUID userId, String currentPassword, String newPassword, String confirmPassword) {
+        if (!newPassword.equals(confirmPassword)) {
             throw new ConflictException("New password and confirmation do not match");
         }
 
         User user = requireUser(userId);
 
-        if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
             throw new UnauthorizedException("Current password is incorrect");
         }
 
-        user.changePassword(passwordEncoder.encode(request.newPassword()));
+        user.changePassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
         log.info("Password changed for user {}", userId);
     }
@@ -83,27 +85,23 @@ public class UserSettingsService implements UserSettingsPort {
     // ─── Preferences ──────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public PreferencesResponse getPreferences(UUID userId) {
+    public PreferencesData getPreferences(UUID userId) {
         User user = requireUser(userId);
         UserPreferences prefs = preferencesRepository.findByUserId(userId)
                 .orElseGet(() -> UserPreferences.createDefaults(user));
-        return toPreferencesResponse(prefs);
+        return toPreferencesData(prefs);
     }
 
     @Transactional
-    public PreferencesResponse updatePreferences(UUID userId, UpdatePreferencesRequest request) {
+    public PreferencesData updatePreferences(UUID userId, String defaultCurrency, int defaultConfidenceLevel, String defaultTimeHorizon) {
         User user = requireUser(userId);
         UserPreferences prefs = preferencesRepository.findByUserId(userId)
                 .orElseGet(() -> UserPreferences.createDefaults(user));
 
-        prefs.update(
-                request.defaultCurrency(),
-                request.defaultConfidenceLevel(),
-                request.defaultTimeHorizon()
-        );
+        prefs.update(defaultCurrency, defaultConfidenceLevel, defaultTimeHorizon);
         preferencesRepository.save(prefs);
         log.info("Preferences updated for user {}", userId);
-        return toPreferencesResponse(prefs);
+        return toPreferencesData(prefs);
     }
 
     // ─── Sessions ─────────────────────────────────────────────────────────────
@@ -112,21 +110,21 @@ public class UserSettingsService implements UserSettingsPort {
      * Returns active sessions stored in Redis for this user.
      * Sessions are written by UserCommandService#login via recordSession().
      */
-    public List<SessionResponse> getActiveSessions(UUID userId) {
+    public List<SessionData> getActiveSessions(UUID userId) {
         String pattern = sessionKeyPrefix(userId) + "*";
         Set<String> keys = jwtService.scanSessionKeys(pattern);
         if (keys == null || keys.isEmpty()) {
             return Collections.emptyList();
         }
 
-        List<SessionResponse> sessions = new ArrayList<>();
+        List<SessionData> sessions = new ArrayList<>();
         for (String key : keys) {
             String payload = jwtService.getRawSessionPayload(key);
             if (payload == null) continue;
             // payload format: "sessionId|deviceHint|ipAddress|issuedAt"
             String[] parts = payload.split("\\|", 4);
             if (parts.length < 4) continue;
-            sessions.add(new SessionResponse(parts[0], parts[1], parts[2], parts[3]));
+            sessions.add(new SessionData(parts[0], parts[1], parts[2], parts[3]));
         }
         return sessions;
     }
@@ -190,11 +188,11 @@ public class UserSettingsService implements UserSettingsPort {
                 .orElseThrow(() -> new RuntimeException("User not found: " + userId));
     }
 
-    private ProfileResponse toProfileResponse(User user) {
+    private ProfileData toProfileData(User user) {
         String memberSince = user.getCreatedAt() != null
                 ? ISO_FORMATTER.format(user.getCreatedAt())
                 : null;
-        return new ProfileResponse(
+        return new ProfileData(
                 user.getUsername(),
                 user.getEmail(),
                 user.getFirstName(),
@@ -203,8 +201,8 @@ public class UserSettingsService implements UserSettingsPort {
         );
     }
 
-    private PreferencesResponse toPreferencesResponse(UserPreferences prefs) {
-        return new PreferencesResponse(
+    private PreferencesData toPreferencesData(UserPreferences prefs) {
+        return new PreferencesData(
                 prefs.getDefaultCurrency(),
                 prefs.getDefaultConfidenceLevel(),
                 prefs.getDefaultTimeHorizon()

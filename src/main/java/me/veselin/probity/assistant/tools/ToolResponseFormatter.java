@@ -5,7 +5,7 @@ import me.veselin.probity.portfolio.dto.PortfolioDto;
 import me.veselin.probity.portfolio.dto.PortfolioSummaryDto;
 import me.veselin.probity.portfolio.dto.PositionDto;
 import me.veselin.probity.portfolio.dto.RiskMetricsDto;
-import me.veselin.probity.bff.dto.simulation.SimulationResultDto;
+import me.veselin.probity.simulation.dto.SimulationData;
 
 import java.text.DecimalFormat;
 import java.util.List;
@@ -90,7 +90,7 @@ public class ToolResponseFormatter {
         return sb.toString().trim();
     }
 
-    public static String formatSimulation(SimulationResultDto simulation) {
+    public static String formatSimulation(SimulationData simulation) {
         StringBuilder sb = new StringBuilder();
         sb.append("Monte Carlo Simulation:\n");
         sb.append("Paths: ").append(simulation.parameters().numberOfSimulations()).append("\n");

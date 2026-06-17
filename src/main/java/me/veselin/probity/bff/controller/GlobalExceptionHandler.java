@@ -1,7 +1,9 @@
-package me.veselin.probity.common.exception;
+package me.veselin.probity.bff.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.auth.exception.UnauthorizedException;
+import me.veselin.probity.common.exception.ConflictException;
 import me.veselin.probity.marketdata.exception.MarketDataException;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
 import me.veselin.probity.portfolio.exception.PositionNotFoundException;
@@ -23,6 +25,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     // ── 400 ───────────────────────────────────────────────────────────────────
@@ -39,6 +42,7 @@ public class GlobalExceptionHandler {
                         (first, second) -> first   // keep first message if field has multiple errors
                 ));
 
+        log.warn("Validation failed on path: {}, errors: {}", request.getRequestURI(), fieldErrors);
         return ResponseEntity.badRequest().body(Map.of(
                 "status", 400,
                 "error", "Validation failed",
@@ -51,6 +55,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<?> handleBadRequest(IllegalArgumentException ex,
                                               HttpServletRequest request) {
+        log.warn("Bad request on path: {}, message: {}", request.getRequestURI(), ex.getMessage());
         return ResponseEntity.badRequest().body(Map.of(
                 "status", 400,
                 "error", "Invalid request input",
@@ -62,6 +67,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(EmptyPortfolioException.class)
     public ResponseEntity<?> handleEmptyPortfolio(EmptyPortfolioException ex,
                                                   HttpServletRequest request) {
+        log.warn("Empty portfolio on path: {}, message: {}", request.getRequestURI(), ex.getMessage());
         return ResponseEntity.badRequest().body(Map.of(
                 "status", 400,
                 "error", ex.getMessage(),
@@ -75,6 +81,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class, UnauthorizedException.class})
     public ResponseEntity<?> handleUnauthorized(RuntimeException ex,
                                                 HttpServletRequest request) {
+        log.warn("Unauthorized access attempt on path: {}, message: {}", request.getRequestURI(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
                 "status", 401,
                 "error", ex.getMessage(),
@@ -88,6 +95,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<?> handleForbidden(Exception ex,
                                              HttpServletRequest request) {
+        log.warn("Access denied on path: {}, message: {}", request.getRequestURI(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
                 "status", 403,
                 "error", "Access denied",
@@ -101,6 +109,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({PortfolioNotFoundException.class, PositionNotFoundException.class, SimulationNotFoundException.class})
     public ResponseEntity<?> handleNotFound(RuntimeException ex,
                                             HttpServletRequest request) {
+        log.warn("Resource not found on path: {}, message: {}", request.getRequestURI(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
                 "status", 404,
                 "error", ex.getMessage(),
@@ -114,6 +123,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<?> handleConflict(ConflictException ex,
                                             HttpServletRequest request) {
+        log.warn("Conflict on path: {}, message: {}", request.getRequestURI(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
                 "status", 409,
                 "error", ex.getMessage(),
@@ -127,6 +137,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleGeneric(Exception ex,
                                            HttpServletRequest request) {
+        log.error("Unexpected error on path: {}, message: {}", request.getRequestURI(), ex.getMessage(), ex);
         return ResponseEntity.internalServerError().body(Map.of(
                 "status", 500,
                 "error", ex.getMessage(),
@@ -140,6 +151,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MarketDataException.class)
     public ResponseEntity<?> handleMarketData(MarketDataException ex,
                                               HttpServletRequest request) {
+        log.error("Market data service error on path: {}, message: {}", request.getRequestURI(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
                 "status", 502,
                 "error", ex.getMessage(),

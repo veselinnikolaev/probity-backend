@@ -12,6 +12,9 @@ import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSeriali
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 @Configuration
+/**
+ * Redis connection and template configuration for caching and session storage.
+ */
 public class RedisConfiguration {
     @Value( "${spring.data.redis.username}")
     private String username;

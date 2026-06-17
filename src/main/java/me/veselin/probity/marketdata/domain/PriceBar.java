@@ -1,5 +1,6 @@
 package me.veselin.probity.marketdata.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -23,6 +24,7 @@ import java.util.Objects;
         uniqueConstraints = @UniqueConstraint(columnNames = {"ticker", "bar_date"}))
 @Getter
 @SQLRestriction("deleted = false")
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class PriceBar extends BaseEntitySoftDelete {
 
     @Column(nullable = false, length = 20)
@@ -117,7 +119,6 @@ public class PriceBar extends BaseEntitySoftDelete {
             );
         }
     }
-
 
     @Override
     public boolean equals(Object o) {
