@@ -1,4 +1,4 @@
-package me.veselin.probity.bff.security;
+package me.veselin.probity.bff.security.filter.jwt;
 
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -12,7 +12,6 @@ import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.auth.jwt.JwtService;
 import me.veselin.probity.auth.port.AuthQueryPort;
 import me.veselin.probity.auth.exception.UnauthorizedException;
-import me.veselin.probity.bff.dto.auth.UserPrincipal;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;

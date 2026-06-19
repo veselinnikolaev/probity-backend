@@ -10,7 +10,7 @@ import me.veselin.probity.auth.dto.PreferencesData;
 import me.veselin.probity.auth.dto.ProfileData;
 import me.veselin.probity.auth.dto.SessionData;
 import me.veselin.probity.auth.port.UserSettingsPort;
-import me.veselin.probity.bff.dto.auth.UserPrincipal;
+import me.veselin.probity.bff.security.filter.jwt.UserPrincipal;
 import me.veselin.probity.bff.dto.settings.*;
 import me.veselin.probity.common.util.ApiRoutes;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +18,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Self-service settings endpoints. All mutations are scoped to the
@@ -175,8 +176,8 @@ public class UserSettingsController {
     @DeleteMapping(ApiRoutes.Users.SESSION)
     public ResponseEntity<Void> revokeSession(
             @AuthenticationPrincipal UserPrincipal principal,
-            @PathVariable String sessionId) {
-        settingsPort.revokeSession(principal.id(), sessionId);
+            @PathVariable UUID sessionId) {
+        settingsPort.revokeSession(principal.id(), sessionId.toString());
         return ResponseEntity.noContent().build();
     }
 

@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import me.veselin.probity.bff.dto.auth.UserPrincipal;
+import me.veselin.probity.bff.security.filter.jwt.UserPrincipal;
 import me.veselin.probity.bff.util.ConditionalGetSupport;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.portfolio.dto.CompositionEntryDto;

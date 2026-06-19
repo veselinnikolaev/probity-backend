@@ -1,6 +1,8 @@
 package me.veselin.probity.bff.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -8,7 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.bff.dto.portfolio.*;
-import me.veselin.probity.bff.dto.auth.UserPrincipal;
+import me.veselin.probity.bff.security.filter.jwt.UserPrincipal;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.portfolio.dto.PortfolioData;
 import me.veselin.probity.portfolio.dto.PositionCreatedDto;
@@ -36,18 +38,24 @@ public class PortfolioCommandController {
      * @param request portfolio creation request with name
      * @param userPrincipal authenticated user principal
      * @param ucb URI components builder for Location header
+     * @param idempotencyKey unique key for idempotent requests
      * @return 201 CREATED with portfolio DTO and Location header
      */
     @Operation(summary = "Create a new portfolio")
     @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "Portfolio created"),
+        @ApiResponse(responseCode = "201", description = "Portfolio created",
+            headers = @Header(name = "X-Cache", description = "Present with value 'Idempotent-Hit' if response was served from cache")),
+        @ApiResponse(responseCode = "400", description = "Missing Idempotency-Key header"),
         @ApiResponse(responseCode = "401", description = "Unauthorized"),
-        @ApiResponse(responseCode = "409", description = "Portfolio name already exists")
+        @ApiResponse(responseCode = "409", description = "Portfolio name already exists or identical request currently processing")
     })
     @PostMapping(ApiRoutes.Portfolios.PORTFOLIOS)
-    public ResponseEntity<PortfolioResponse> create(@RequestBody PortfolioCreateRequest request,
-                                                      @AuthenticationPrincipal UserPrincipal userPrincipal,
-                                                      UriComponentsBuilder ucb) {
+    public ResponseEntity<PortfolioResponse> create(
+            @Valid @RequestBody PortfolioCreateRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Parameter(description = "Unique key for idempotent requests. Prevents duplicate portfolio creation.", required = true)
+            @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
+            UriComponentsBuilder ucb) {
 
         log.info("Creating portfolio for user: {}, name: {}", userPrincipal.id(), request.name());
         PortfolioData data = portfolioCommandPort.create(request.name(), userPrincipal.id());
@@ -129,6 +137,7 @@ public class PortfolioCommandController {
      * @param id portfolio UUID
      * @param request position creation request with asset ID, quantity, and price
      * @param principal authenticated user principal
+     * @param idempotencyKey unique key for idempotent requests
      * @param ucb URI components builder for Location header
      * @return 201 CREATED with position DTO and Location header
      * @throws me.veselin.probity.portfolio.exception.PortfolioNotFoundException if portfolio not found
@@ -136,16 +145,21 @@ public class PortfolioCommandController {
      */
     @Operation(summary = "Add a position to portfolio")
     @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "Position added"),
+        @ApiResponse(responseCode = "201", description = "Position added",
+            headers = @Header(name = "X-Cache", description = "Present with value 'Idempotent-Hit' if response was served from cache")),
+        @ApiResponse(responseCode = "400", description = "Missing Idempotency-Key header"),
         @ApiResponse(responseCode = "401", description = "Unauthorized"),
         @ApiResponse(responseCode = "403", description = "Access denied"),
-        @ApiResponse(responseCode = "404", description = "Portfolio or asset not found")
+        @ApiResponse(responseCode = "404", description = "Portfolio or asset not found"),
+        @ApiResponse(responseCode = "409", description = "Identical request currently processing")
     })
     @PostMapping(ApiRoutes.Portfolios.POSITIONS)
     public ResponseEntity<PositionCreatedDto> addPosition(
             @PathVariable UUID id,
-            @RequestBody PositionCreateRequest request,
+            @Valid @RequestBody PositionCreateRequest request,
             @AuthenticationPrincipal UserPrincipal principal,
+            @Parameter(description = "Unique key for idempotent requests. Prevents duplicate position creation.", required = true)
+            @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
             UriComponentsBuilder ucb) {
 
         log.info("Adding position to portfolio: {}, ticker: {}, quantity: {}", id, request.ticker(), request.quantity());
@@ -182,7 +196,7 @@ public class PortfolioCommandController {
     public ResponseEntity<Void> updatePosition(
             @PathVariable UUID id,
             @PathVariable UUID positionId,
-            @RequestBody PositionUpdateRequest request,
+            @Valid @RequestBody PositionUpdateRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         log.info("Updating position: {} in portfolio: {}, quantity: {}", positionId, id, request.quantity());

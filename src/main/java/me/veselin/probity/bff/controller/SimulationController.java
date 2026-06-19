@@ -1,13 +1,15 @@
 package me.veselin.probity.bff.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import me.veselin.probity.bff.dto.auth.UserPrincipal;
+import me.veselin.probity.bff.security.filter.jwt.UserPrincipal;
 import me.veselin.probity.bff.util.ConditionalGetSupport;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.bff.dto.simulation.RunSimulationRequest;
@@ -35,18 +37,28 @@ public class SimulationController {
     /**
      * POST /simulations/run
      * Runs a new Monte Carlo simulation and persists the result.
+     *
+     * @param request simulation parameters
+     * @param principal authenticated user principal
+     * @param idempotencyKey unique key for idempotent requests
+     * @param ucb URI components builder for Location header
+     * @return 201 CREATED with simulation result
      */
     @Operation(summary = "Run Monte Carlo simulation")
     @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "Simulation created"),
+        @ApiResponse(responseCode = "201", description = "Simulation created",
+            headers = @Header(name = "X-Cache", description = "Present with value 'Idempotent-Hit' if response was served from cache")),
         @ApiResponse(responseCode = "400", description = "Invalid request or empty portfolio"),
         @ApiResponse(responseCode = "401", description = "Unauthorized"),
-        @ApiResponse(responseCode = "404", description = "Portfolio not found")
+        @ApiResponse(responseCode = "404", description = "Portfolio not found"),
+        @ApiResponse(responseCode = "409", description = "Identical request currently processing")
     })
     @PostMapping(ApiRoutes.Simulations.RUN)
     public ResponseEntity<SimulationResponse> run(
             @Valid @RequestBody RunSimulationRequest request,
             @AuthenticationPrincipal UserPrincipal principal,
+            @Parameter(description = "Unique key for idempotent requests. Prevents duplicate simulation runs.", required = true)
+            @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
             UriComponentsBuilder ucb) {
 
         log.info("Running simulation for portfolio: {}, user: {}, simulations: {}, horizon: {} days, confidence: {}",

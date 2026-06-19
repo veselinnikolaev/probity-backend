@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.assistant.port.AssistantPort;
 import me.veselin.probity.bff.dto.assistant.ChatRequest;
 import me.veselin.probity.bff.dto.assistant.ChatResponse;
-import me.veselin.probity.bff.dto.auth.UserPrincipal;
+import me.veselin.probity.bff.security.filter.jwt.UserPrincipal;
 import me.veselin.probity.bff.security.rate_limit.RateLimit;
 import me.veselin.probity.common.util.ApiRoutes;
 import org.springframework.http.ResponseEntity;

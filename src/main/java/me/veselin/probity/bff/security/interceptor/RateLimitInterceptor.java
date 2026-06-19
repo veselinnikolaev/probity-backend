@@ -1,10 +1,11 @@
-package me.veselin.probity.bff.security.rate_limit;
+package me.veselin.probity.bff.security.interceptor;
 
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import me.veselin.probity.bff.security.rate_limit.RateLimit;
 import me.veselin.probity.bff.security.rate_limit.store.BucketStore;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.auth.domain.User;
 import me.veselin.probity.auth.domain.UserPreferences;
+import me.veselin.probity.auth.exception.SessionNotFoundException;
 import me.veselin.probity.auth.exception.UnauthorizedException;
 import me.veselin.probity.auth.jwt.JwtService;
 import me.veselin.probity.auth.port.UserSettingsPort;
@@ -12,7 +13,6 @@ import me.veselin.probity.auth.repository.UserRepository;
 import me.veselin.probity.auth.dto.PreferencesData;
 import me.veselin.probity.auth.dto.ProfileData;
 import me.veselin.probity.auth.dto.SessionData;
-import me.veselin.probity.common.exception.ConflictException;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -68,7 +68,7 @@ public class UserSettingsService implements UserSettingsPort {
     @Transactional
     public void changePassword(UUID userId, String currentPassword, String newPassword, String confirmPassword) {
         if (!newPassword.equals(confirmPassword)) {
-            throw new ConflictException("New password and confirmation do not match");
+            throw new IllegalArgumentException("New password and confirmation do not match");
         }
 
         User user = requireUser(userId);
@@ -133,7 +133,7 @@ public class UserSettingsService implements UserSettingsPort {
         String key = sessionKey(userId, sessionId);
         boolean deleted = jwtService.deleteSessionKey(key);
         if (!deleted) {
-            throw new UnauthorizedException("Session not found or already expired");
+            throw new SessionNotFoundException("Session not found or already expired");
         }
         // Also blacklist the refresh token associated with this session
         jwtService.deleteRefreshTokenByJti(sessionId);

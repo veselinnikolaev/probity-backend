@@ -23,6 +23,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
 
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 200, 30, 0.95))))
                 .andExpect(status().isCreated())
@@ -57,6 +58,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
 
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-2")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -79,6 +81,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
 
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-3")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 100, 10, 0.95))))
                 .andExpect(status().isCreated())
@@ -94,6 +97,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
 
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-4")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 100, 5, 0.95))))
                 .andExpect(status().isCreated())
@@ -107,6 +111,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
 
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-5")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 100, 20, 0.95))))
                 .andExpect(status().isCreated())
@@ -125,6 +130,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
 
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-6")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 100, 20, 0.95))))
                 .andExpect(status().isCreated())
@@ -141,6 +147,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
 
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-7")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(emptyPortfolioId, 100, 30, 0.95))))
                 .andExpect(status().isBadRequest());
@@ -152,6 +159,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
 
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-8")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(UUID.randomUUID().toString(), 100, 30, 0.95))))
                 .andExpect(status().isNotFound());
@@ -163,6 +171,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
 
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), other.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-9")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 100, 30, 0.95))))
                 .andExpect(status().isForbidden());
@@ -171,6 +180,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
     @Test
     void run_noAuth_returns401() throws Exception {
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
+                        .header("Idempotency-Key", "test-key-sim-10")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 100, 30, 0.95))))
                 .andExpect(status().isUnauthorized());
@@ -183,6 +193,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
         AuthResult auth = login();
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-11")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 50, 30, 0.95)))) // min=100
                 .andExpect(status().isBadRequest());
@@ -193,6 +204,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
         AuthResult auth = login();
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-12")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 99_999, 30, 0.95)))) // max=10000
                 .andExpect(status().isBadRequest());
@@ -203,6 +215,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
         AuthResult auth = login();
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-13")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 100, 0, 0.95)))) // min=1
                 .andExpect(status().isBadRequest());
@@ -213,6 +226,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
         AuthResult auth = login();
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-14")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 100, 9999, 0.95)))) // max=1260
                 .andExpect(status().isBadRequest());
@@ -223,6 +237,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
         AuthResult auth = login();
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-15")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 100, 30, 0.50)))) // min=0.80
                 .andExpect(status().isBadRequest());
@@ -233,6 +248,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
         AuthResult auth = login();
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-16")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 100, 30, 1.0)))) // max=0.99
                 .andExpect(status().isBadRequest());
@@ -347,6 +363,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
 
         String runResponse = mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-17")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, 100, 10, 0.95))))
                 .andExpect(status().isCreated())
@@ -381,6 +398,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
     private String runSimulationAndGetId(AuthResult auth, int paths, int days) throws Exception {
         String response = mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-sim-helper-" + paths + "-" + days)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(runRequestBody(portfolioId, paths, days, 0.95))))
                 .andExpect(status().isCreated())
@@ -392,6 +410,7 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
     private String createPortfolio(AuthResult auth, String name) throws Exception {
         String response = mockMvc.perform(withCsrf(post(ApiRoutes.Portfolios.PORTFOLIOS)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-portfolio-" + name.hashCode())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": "%s"}

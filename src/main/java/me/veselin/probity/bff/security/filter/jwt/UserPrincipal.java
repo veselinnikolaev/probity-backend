@@ -1,4 +1,4 @@
-package me.veselin.probity.bff.dto.auth;
+package me.veselin.probity.bff.security.filter.jwt;
 
 import java.util.UUID;
 

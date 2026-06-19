@@ -16,7 +16,6 @@ import me.veselin.probity.portfolio.exception.PositionNotFoundException;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioCommandPort;
 import me.veselin.probity.portfolio.repository.PortfolioRepository;
 import me.veselin.probity.portfolio.service.asset.AssetResolver;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,7 +60,7 @@ public class PortfolioCommandService implements PortfolioCommandPort {
                         "Portfolio not found: " + portfolioId));
 
         if (!portfolio.getUserId().equals(userId))
-            throw new AccessDeniedException("Access denied to portfolio: " + portfolioId);
+            throw new PortfolioNotFoundException("Portfolio not found: " + portfolioId);
 
         Asset asset = assetResolver.resolve(request.ticker());
         BigDecimal currentPrice = marketDataPort.getLatestPrice(asset.getTicker());
@@ -93,7 +92,7 @@ public class PortfolioCommandService implements PortfolioCommandPort {
                 .orElseThrow(() -> new PortfolioNotFoundException("Portfolio not found: " + portfolioId + " for user: " + userId));
 
         if (!portfolio.getUserId().equals(userId))
-            throw new AccessDeniedException("Access denied to portfolio: " + portfolioId + " for user: " + userId);
+            throw new PortfolioNotFoundException("Portfolio not found: " + portfolioId);
 
         // Find the position to get its ticker, then fetch current price
         PortfolioPosition pos = portfolio.getPositions().stream()
@@ -116,7 +115,7 @@ public class PortfolioCommandService implements PortfolioCommandPort {
                 .orElseThrow(() -> new PortfolioNotFoundException("Portfolio not found: " + portfolioId));
 
         if (!portfolio.getUserId().equals(userId)) {
-            throw new AccessDeniedException("Access denied to portfolio: " + portfolioId);
+            throw new PortfolioNotFoundException("Portfolio not found: " + portfolioId);
         }
 
         portfolio.removePosition(positionId);
@@ -129,7 +128,7 @@ public class PortfolioCommandService implements PortfolioCommandPort {
                 .orElseThrow(() -> new PortfolioNotFoundException("Portfolio not found: " + portfolioId));
 
         if (!portfolio.getUserId().equals(userId)) {
-            throw new AccessDeniedException("Access denied to portfolio: " + portfolioId);
+            throw new PortfolioNotFoundException("Portfolio not found: " + portfolioId);
         }
 
         boolean nameChanged = !portfolio.getName().equalsIgnoreCase(name.trim());
@@ -148,7 +147,7 @@ public class PortfolioCommandService implements PortfolioCommandPort {
                 .orElseThrow(() -> new PortfolioNotFoundException("Portfolio not found: " + portfolioId));
 
         if (!portfolio.getUserId().equals(userId)) {
-            throw new AccessDeniedException("Access denied to portfolio: " + portfolioId);
+            throw new PortfolioNotFoundException("Portfolio not found: " + portfolioId);
         }
 
         portfolio.softDelete();

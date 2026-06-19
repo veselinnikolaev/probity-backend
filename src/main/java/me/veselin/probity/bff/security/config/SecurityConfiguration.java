@@ -1,7 +1,9 @@
-package me.veselin.probity.bff.security;
+package me.veselin.probity.bff.security.config;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import me.veselin.probity.bff.security.filter.idempotency.IdempotencyFilter;
+import me.veselin.probity.bff.security.filter.jwt.JwtAuthenticationFilter;
 import me.veselin.probity.common.util.ApiRoutes;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -45,6 +47,7 @@ public class SecurityConfiguration {
     private String jwtSecret;
 
     private final JwtAuthenticationFilter jwtFilter;
+    private final IdempotencyFilter idempotencyFilter;
     private final AuthenticationEntryPoint authenticationEntryPoint;
 
     @PostConstruct
@@ -96,6 +99,7 @@ public class SecurityConfiguration {
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(idempotencyFilter, JwtAuthenticationFilter.class)
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint));
 
         return http.build();
@@ -135,12 +139,14 @@ public class SecurityConfiguration {
                 "X-Requested-With",
                 "If-None-Match",
                 "If-Modified-Since",
-                "X-XSRF-TOKEN"
+                "X-XSRF-TOKEN",
+                "Idempotency-Key"
         ));
         config.setExposedHeaders(List.of(
                 "ETag",
                 "Last-Modified",
-                "X-RateLimit-Remaining"
+                "X-RateLimit-Remaining",
+                "X-Cache"
         ));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L); // cache preflight for 1 hour
