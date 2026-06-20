@@ -3,16 +3,12 @@ package me.veselin.probity.auth;
 import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.common.util.ApiRoutes;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 public class LoginIntegrationTest extends BaseAuthIntegrationTest {
-
-    @Autowired MockMvc mockMvc;
 
     @Test
     void login_withValidCredentials_returnsUsernameAndRole() throws Exception {

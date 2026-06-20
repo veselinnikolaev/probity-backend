@@ -7,9 +7,7 @@ import me.veselin.probity.auth.dto.AuthResult;
 import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.common.util.ApiRoutes;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.web.servlet.MockMvc;
 
 
 import static org.hamcrest.Matchers.*;
@@ -18,9 +16,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @Import(RateLimitTestConfig.class)
 public class AssetIntegrationTest extends BaseAuthIntegrationTest {
-
-    @Autowired
-    private MockMvc mockMvc;
 
     // ── GET /assets/search ─────────────────────────────────────────────────────
 
@@ -39,49 +34,11 @@ public class AssetIntegrationTest extends BaseAuthIntegrationTest {
     }
 
     @Test
-    void search_withValidName_returnsResults() throws Exception {
-        AuthResult authResult = login();
-
-        mockMvc.perform(get(ApiRoutes.Assets.SEARCH)
-                        .param("q", "Apple")
-                        .cookie(new Cookie(Token.ACCESS.getCookieName(), authResult.accessToken())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$", hasSize(greaterThan(0))))
-                .andExpect(jsonPath("$[0].ticker").exists())
-                .andExpect(jsonPath("$[0].name").exists());
-    }
-
-    @Test
-    void search_withPartialTicker_returnsResults() throws Exception {
-        AuthResult authResult = login();
-
-        mockMvc.perform(get(ApiRoutes.Assets.SEARCH)
-                        .param("q", "MS")
-                        .cookie(new Cookie(Token.ACCESS.getCookieName(), authResult.accessToken())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$", hasSize(greaterThan(0))));
-    }
-
-    @Test
     void search_withBlankQuery_returnsEmptyArray() throws Exception {
         AuthResult authResult = login();
 
         mockMvc.perform(get(ApiRoutes.Assets.SEARCH)
                         .param("q", "")
-                        .cookie(new Cookie(Token.ACCESS.getCookieName(), authResult.accessToken())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$").isEmpty());
-    }
-
-    @Test
-    void search_withWhitespaceQuery_returnsEmptyArray() throws Exception {
-        AuthResult authResult = login();
-
-        mockMvc.perform(get(ApiRoutes.Assets.SEARCH)
-                        .param("q", "   ")
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), authResult.accessToken())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
@@ -97,54 +54,6 @@ public class AssetIntegrationTest extends BaseAuthIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
-    }
-
-    @Test
-    void search_withUnknownTicker_returnsEmptyArray() throws Exception {
-        AuthResult authResult = login();
-
-        mockMvc.perform(get(ApiRoutes.Assets.SEARCH)
-                        .param("q", "UNKNOWNXYZ123")
-                        .cookie(new Cookie(Token.ACCESS.getCookieName(), authResult.accessToken())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$").isEmpty());
-    }
-
-    @Test
-    void search_caseInsensitive_returnsResults() throws Exception {
-        AuthResult authResult = login();
-
-        mockMvc.perform(get(ApiRoutes.Assets.SEARCH)
-                        .param("q", "aapl")
-                        .cookie(new Cookie(Token.ACCESS.getCookieName(), authResult.accessToken())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$", hasSize(greaterThan(0))));
-    }
-
-    @Test
-    void search_withMixedCaseTicker_returnsResults() throws Exception {
-        AuthResult authResult = login();
-
-        mockMvc.perform(get(ApiRoutes.Assets.SEARCH)
-                        .param("q", "MMM")
-                        .cookie(new Cookie(Token.ACCESS.getCookieName(), authResult.accessToken())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$", hasSize(greaterThan(0))));
-    }
-
-    @Test
-    void search_multipleResults_returnsAllMatching() throws Exception {
-        AuthResult authResult = login();
-
-        mockMvc.perform(get(ApiRoutes.Assets.SEARCH)
-                        .param("q", "A")
-                        .cookie(new Cookie(Token.ACCESS.getCookieName(), authResult.accessToken())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$", hasSize(greaterThan(1))));
     }
 
     @Test

@@ -1,6 +1,7 @@
-/*package me.veselin.probity.settings;
+package me.veselin.probity.settings;
 
 import jakarta.servlet.http.Cookie;
+import me.veselin.probity.auth.BaseAuthIntegrationTest;
 import me.veselin.probity.auth.dto.AuthResult;
 import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.common.util.ApiRoutes;
@@ -10,9 +11,7 @@ import org.springframework.http.MediaType;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-public class UserSettingsIntegrationTest extends BaseUserSettingsIntegrationTest {
-    @Autowired
-    protected MockMvc mockMvc;
+public class UserSettingsIntegrationTest extends BaseAuthIntegrationTest {
 
     // ── GET /users/me ─────────────────────────────────────────────────────────
 
@@ -23,10 +22,10 @@ public class UserSettingsIntegrationTest extends BaseUserSettingsIntegrationTest
         mockMvc.perform(get(ApiRoutes.Users.ME)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.username").value("testuser"))
-                .andExpect(jsonPath("$.email").value("test@probity.test"))
-                .andExpect(jsonPath("$.firstName").value("Test"))
-                .andExpect(jsonPath("$.lastName").value("User"))
+                .andExpect(jsonPath("$.username").value(ADMIN_USERNAME))
+                .andExpect(jsonPath("$.email").value(ADMIN_EMAIL))
+                .andExpect(jsonPath("$.firstName").value(ADMIN_FIRST_NAME))
+                .andExpect(jsonPath("$.lastName").value(ADMIN_LAST_NAME))
                 .andExpect(jsonPath("$.memberSince").exists());
     }
 
@@ -40,7 +39,7 @@ public class UserSettingsIntegrationTest extends BaseUserSettingsIntegrationTest
 
     @Test
     void updateProfile_validData_returnsUpdatedProfile() throws Exception {
-        AuthResult auth = login();
+        AuthResult auth = registerAndLogin("updateuser", "update@probity.test", "Password123!");
 
         mockMvc.perform(withCsrf(patch(ApiRoutes.Users.ME)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
@@ -136,7 +135,7 @@ public class UserSettingsIntegrationTest extends BaseUserSettingsIntegrationTest
 
     @Test
     void changePassword_validData_returns204() throws Exception {
-        AuthResult auth = login();
+        AuthResult auth = registerAndLogin("pwuser", "pw@probity.test", "Password123!");
 
         mockMvc.perform(withCsrf(put(ApiRoutes.Users.PASSWORD)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
@@ -468,4 +467,3 @@ public class UserSettingsIntegrationTest extends BaseUserSettingsIntegrationTest
                 .andExpect(status().isForbidden());
     }
 }
-*/

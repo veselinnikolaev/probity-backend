@@ -7,18 +7,14 @@ import me.veselin.probity.auth.dto.AuthResult;
 import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.common.util.ApiRoutes;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @Import(RateLimitTestConfig.class)
 public class AssistantIntegrationTest extends BaseAuthIntegrationTest {
-    @Autowired
-    protected MockMvc mockMvc;
 
     // ── POST /assistant/chat ───────────────────────────────────────────────────
 

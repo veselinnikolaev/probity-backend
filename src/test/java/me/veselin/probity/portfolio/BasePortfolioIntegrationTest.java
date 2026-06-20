@@ -2,7 +2,6 @@ package me.veselin.probity.portfolio;
 
 import me.veselin.probity.auth.BaseAuthIntegrationTest;
 import me.veselin.probity.auth.domain.User;
-import me.veselin.probity.auth.repository.UserRepository;
 import me.veselin.probity.marketdata.domain.PriceBar;
 import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.portfolio.domain.Asset;
@@ -17,7 +16,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -39,10 +37,8 @@ import static org.mockito.Mockito.when;
 @Transactional
 public abstract class BasePortfolioIntegrationTest extends BaseAuthIntegrationTest {
 
-    @Autowired protected MockMvc mockMvc;
     @Autowired protected PortfolioRepository portfolioRepository;
     @Autowired protected AssetRepository assetRepository;
-    @Autowired protected UserRepository userRepository;
 
     @MockitoBean protected MarketDataPort marketDataPort;
     @MockitoBean protected RiskPort riskPort;

@@ -5,8 +5,6 @@ import me.veselin.probity.auth.dto.AuthResult;
 import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.common.util.ApiRoutes;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.Arrays;
@@ -15,8 +13,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 public class RefreshIntegrationTest extends BaseAuthIntegrationTest {
-
-    @Autowired MockMvc mockMvc;
 
     @Test
     void refresh_withValidRefreshToken_returnsNewAccessToken() throws Exception {

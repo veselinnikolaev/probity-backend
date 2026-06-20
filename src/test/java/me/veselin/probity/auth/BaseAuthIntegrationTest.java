@@ -29,15 +29,17 @@ public abstract class BaseAuthIntegrationTest extends BaseIntegrationTest {
     @Autowired
     AuthCommandPort authCommandPort;
     @Autowired
-    MockMvc mockMvc;
+    protected MockMvc mockMvc;
     @Autowired
     protected ObjectMapper objectMapper;
     @Autowired
-    UserRepository userRepository;
+    protected UserRepository userRepository;
 
     protected static final String ADMIN_USERNAME = "admin";
     protected static final String ADMIN_EMAIL = "admin@probity.test";
     protected static final String ADMIN_PASSWORD = "Password123!";
+    protected static final String ADMIN_FIRST_NAME = "Admin";
+    protected static final String ADMIN_LAST_NAME = "User";
 
     protected AuthResult login() throws Exception {
         MvcResult result = mockMvc.perform(post(ApiRoutes.Auth.LOGIN)
