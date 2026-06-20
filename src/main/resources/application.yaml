@@ -61,7 +61,7 @@ spring:
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:probity}
-    username: ${DB_USERNAME}
+    username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
@@ -99,7 +99,7 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       username: default
-      password: ${REDIS_PASSWORD:password}
+      password: ${REDIS_PASSWORD}
       database: ${REDIS_DATABASE:1}
       timeout: 2000ms
       lettuce:

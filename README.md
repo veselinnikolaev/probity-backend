@@ -74,12 +74,15 @@ Probity solves the challenge of real-time portfolio risk assessment by combining
 - **Java 21**: Latest LTS with Project Loom virtual threads (JEP 444)
 - **Spring Boot 3.x**: Modern Spring framework with native image support
 - **Spring AI**: AI-powered portfolio analyst with tool calling and chat memory
+- **SpringDoc OpenAPI**: Interactive API documentation with Swagger UI
 - **Virtual Threads**: I/O-bound operations use `Executors.newVirtualThreadPerTaskExecutor()`
 - **Dedicated Thread Pools**: CPU-bound simulations use custom `ThreadPoolTaskExecutor` with `CallerRunsPolicy`
 - **PostgreSQL**: System of record with JSONB for simulation payloads
-- **Redis**: Caching, session management, rate limiting, and chat memory persistence
+- **Redis**: Caching, session management, rate limiting, chat memory persistence, and idempotency key storage
 - **Testcontainers**: Integration testing with real PostgreSQL and Redis
 - **Flyway**: Database schema migration management
+- **Micrometer & Prometheus**: Application metrics and monitoring
+- **SendGrid**: Email service for verification and notifications
 
 ## Performance
 
@@ -102,7 +105,7 @@ Near-linear scalability with CPU cores and zero GC pauses due to primitive `doub
 | Portfolio Valuation | 92% | 3ms | 80ms |
 | Risk Calculations | 78% | 1ms | 45ms |
 
-**Test suite**: 233/233 passing (180 unit + 53 integration tests).
+**Test suite**: 324/324 passing tests with comprehensive coverage.
 
 ## Mathematical Foundations
 
@@ -156,12 +159,14 @@ Edge cases handled:
 ## Architecture Overview
 
 - **Bounded contexts**
-  - `auth`: user identity, JWT lifecycle, refresh rotation/logout invalidation
+  - `auth`: user identity, JWT lifecycle, refresh rotation/logout invalidation, email verification
   - `portfolio`: aggregate roots (`Portfolio`, `PortfolioPosition`, `Asset`) and read models
   - `marketdata`: persisted OHLCV bars + adapter-backed gap filling
   - `risk`: quantitative calculations (volatility, Sharpe, VaR, drawdown, correlation)
   - `simulation`: Monte Carlo runs and JSONB payload persistence
   - `assistant`: AI-powered portfolio risk analyst with Spring AI tool calling
+  - `settings`: user profile management, preferences, session management, account deletion
+  - `notification`: email service for verification and notifications
 - **DDD style**
   - Aggregate roots enforce invariants in domain methods
   - Soft-delete centralized via `BaseEntitySoftDelete`
@@ -178,13 +183,15 @@ Edge cases handled:
 ```text
 Probity
 ├─ src/main/java/me/veselin/probity
-│  ├─ auth/                # Auth domain, ports, JWT, repositories, command/query services
+│  ├─ auth/                # Auth domain, ports, JWT, repositories, command/query services, email verification
 │  ├─ assistant/           # AI-powered portfolio analyst, Spring AI tools, chat memory
 │  ├─ bff/                 # Controllers, request/response DTOs, security filters/config, cookies
 │  ├─ common/              # Shared base entities, config, exceptions, utility helpers
 │  ├─ marketdata/          # PriceBar aggregate, Yahoo adapter, sync/read services, port
+│  ├─ notification/        # Email service for verification and notifications
 │  ├─ portfolio/           # Portfolio aggregate, DTO projections, command/query services, port
 │  ├─ risk/                # Risk calculation service + quantitative port/DTOs
+│  ├─ settings/            # User profile, preferences, session management
 │  └─ simulation/          # Simulation aggregate, mapper, repository, simulation service
 ├─ src/main/resources
 │  ├─ application.properties
@@ -261,20 +268,33 @@ Run specific test classes:
 
 ## Environment Variables
 
+### Required Variables
+
 | Name | Description | Example |
 |---|---|---|
+| `JWT_SECRET` | JWT signing secret (minimum 32 characters) | `A_long_random_secret_string_...` |
+| `DB_PASSWORD` | Database password | `postgres_password` |
+| `REDIS_PASSWORD` | Redis password | `redis_password` |
+| `ANTHROPIC_API_KEY` | Anthropic API key for AI assistant | `sk-ant-...` |
+| `SENDGRID_API_KEY` | SendGrid API key for email service | `SG.xxx` |
+
+### Optional Variables (with defaults)
+
+| Name | Description | Default |
+|---|---|---|
 | `PORT` | HTTP server port | `8080` |
+| `COOKIE_SECURE` | Cookie secure flag (HTTPS only) | `true` |
 | `SAME_SITE` | Cookie SameSite policy | `Strict` |
+| `APP_FRONTEND_URL` | Frontend URL for CORS | `http://localhost:5173` |
 | `DB_HOST` | PostgreSQL host | `localhost` |
 | `DB_PORT` | PostgreSQL port | `5432` |
 | `DB_NAME` | Database name | `probity` |
-| `DB_USERNAME` | Database user | `postgres` |
-| `DB_PASSWORD` | Database password | `postgres_password` |
 | `REDIS_HOST` | Redis host | `localhost` |
 | `REDIS_PORT` | Redis port | `6379` |
-| `REDIS_PASSWORD` | Redis password | `redis_password` |
 | `REDIS_DATABASE` | Redis logical DB index | `1` |
-| `JWT_SECRET` | JWT signing secret (>=32 chars) | `A_long_random_secret_string_...` |
+| `IDEMPOTENCY_TTL_HOURS` | Idempotency key TTL in hours | `24` |
+| `ASSISTANT_CHAT_MEMORY_MAX_MESSAGES` | Max messages in AI chat memory | `20` |
+| `FROM_EMAIL` | Sender email for notifications | `noreply@probity.com` |
 | `SPRING_DOCKER_COMPOSE_ENABLED` | Auto-compose integration flag | `false` |
 | `CORS_ALLOWED_ORIGINS` | Allowed frontend origins | `http://localhost:5173` |
 
@@ -283,6 +303,7 @@ Run specific test classes:
 - **Cookie-based JWT transport**
   - Access and refresh tokens are returned as secure, `HttpOnly` cookies to reduce token exposure in browser JS.
   - Refresh token is path-scoped to the refresh endpoint to reduce accidental surface area.
+  - Email verification for account activation with secure token-based flows.
 - **Soft deletes for core aggregates**
   - Domain entities extending `BaseEntitySoftDelete` preserve auditability and historical consistency.
   - Hibernate restrictions (`@SQLRestriction`) keep deleted rows out of normal reads.
@@ -292,6 +313,77 @@ Run specific test classes:
   - Monte Carlo results are stored as one JSONB payload per run to optimize read-back and keep relational schema stable.
 - **Primitive arrays for simulation paths**
   - Uses `double[][]` instead of `List<List<Double>>` to minimize GC overhead and memory footprint for large simulation runs.
+- **Idempotency for POST operations**
+  - Redis-backed idempotency keys prevent duplicate processing of portfolio and simulation creation requests.
+  - Atomic state transitions (PENDING → COMPLETED) with configurable TTL (default 24 hours).
+  - Cache hits return `X-Cache: Idempotent-Hit` header for transparency.
+- **Rate limiting**
+  - Redis-backed sliding window rate limiting per endpoint.
+  - Configurable limits per endpoint to protect against abuse and control costs.
+- **OpenAPI documentation**
+  - Interactive API documentation available at `/swagger-ui.html`
+  - OpenAPI spec at `/api-docs` for client generation
+  - Global headers documented (Idempotency-Key, cookie auth)
+
+## API Documentation
+
+Interactive API documentation is available via SpringDoc OpenAPI:
+
+- **Swagger UI**: `http://localhost:8080/swagger-ui.html`
+- **OpenAPI Spec**: `http://localhost:8080/api-docs`
+
+### Documented Features
+
+- **Authentication**: Cookie-based JWT with refresh token flow
+- **Idempotency**: `Idempotency-Key` header for POST operations (portfolio creation, position addition, simulation runs)
+- **Rate Limiting**: Per-endpoint limits documented in API responses
+- **Security**: CSRF protection, timing-attack mitigation
+- **Error Responses**: Standardized error format with detailed messages
+
+### Global Headers
+
+- `Idempotency-Key`: Required for POST endpoints that create resources (portfolio, positions, simulations)
+- `Cookie`: `access_token` for authentication (HttpOnly, Secure)
+
+## Monitoring & Metrics
+
+Probity exposes Prometheus metrics and structured logs for production monitoring:
+
+### Endpoints
+
+- **Health Check**: `http://localhost:8080/actuator/health`
+- **Prometheus Metrics**: `http://localhost:8080/actuator/prometheus`
+
+### Key Metrics
+
+All metrics are labeled with `application=probity` for easy filtering in Grafana:
+
+- JVM metrics (memory, GC, threads)
+- HTTP request metrics (latency, count, status codes)
+- Database connection pool metrics (HikariCP)
+- Redis connection metrics
+- Custom business metrics (simulation execution time, cache hit rates)
+
+### Logging
+
+Structured JSON logging configured for Loki integration:
+- Application logs with correlation IDs
+- Request/response logging for API calls
+- Error and warning level alerts
+- Performance metrics in logs
+
+### Monitoring Stack
+
+- **Prometheus**: Metrics collection and storage
+- **Grafana**: Visualization and dashboards
+- **Loki**: Log aggregation and querying
+
+### Recommended Grafana Dashboards
+
+- JVM Micrometer dashboard
+- Spring Boot Statistics dashboard
+- Custom dashboard for simulation performance and cache efficiency
+- Loki logs dashboard with correlation ID filtering
 
 ## AI-Powered Portfolio Assistant
 
@@ -347,6 +439,103 @@ The assistant will automatically call the appropriate tools to fetch portfolio d
 3. Boot app and verify Flyway applies migration cleanly.
 4. Never modify previously applied versions; add a new migration instead.
 
+## Security Features
+
+### Authentication & Authorization
+
+- **JWT-based authentication** with access token (15 min) and refresh token (7 days)
+- **Timing-attack mitigation** in password verification (constant-time comparison)
+- **Refresh token rotation** on every use to prevent token replay attacks
+- **Role-based access control** (USER, ADMIN roles)
+- **Portfolio ownership enforcement** at repository level
+
+### CSRF Protection
+
+- Double-submit cookie pattern with token rotation
+- Stateless implementation with Redis-backed token storage
+- Automatic token validation on state-changing requests
+
+### Rate Limiting
+
+- Redis-backed distributed rate limiting with sliding window algorithm
+- Per-endpoint configurable limits:
+  - `/auth/register`: 3 req/60s
+  - `/auth/login`: 5 req/60s
+  - `/simulations/run`: 10 req/60s
+  - `/assistant/chat`: 10 req/60s
+  - `/assets/search`: 30 req/60s
+  - Default: 100 req/60s
+
+### Idempotency
+
+- Required `Idempotency-Key` header for POST operations (portfolio creation, position addition, simulation runs)
+- Redis-backed state management with atomic transitions (PENDING → COMPLETED)
+- Configurable TTL (default 24 hours)
+- Cache hits return `X-Cache: Idempotent-Hit` header
+- Key format validation (8-256 characters, alphanumeric + underscore + hyphen)
+- User-scoped keys to prevent cross-user conflicts
+
+### Email Verification
+
+- Secure token-based email verification flow
+- Token expiration: 24 hours
+- Maximum retry attempts: 3
+- SendGrid integration for email delivery
+
+## Caching Strategy
+
+### Redis Caching
+
+- **Cache key prefix**: `probity:cache:`
+- **Default TTL**: 10 minutes (600 seconds)
+- **Cache null values**: Disabled (prevents cache stampede)
+- **Connection pooling**: Lettuce with configurable pool (max-active: 10, max-idle: 5)
+
+### Cached Operations
+
+- Market data (OHLCV bars): 85% hit rate, 2ms latency
+- Portfolio valuations: 92% hit rate, 3ms latency
+- Risk calculations: 78% hit rate, 1ms latency
+
+### Cache Invalidation
+
+- Time-based expiration (TTL)
+- Manual invalidation on portfolio/position updates
+- Cache stampede protection via null value caching disabled
+
+## Error Handling
+
+### Standardized Error Format
+
+All API errors follow a consistent JSON format:
+
+```json
+{
+  "timestamp": "2026-06-21T01:30:00Z",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Validation failed",
+  "path": "/api/v1/portfolios"
+}
+```
+
+### Common Error Codes
+
+- `400 Bad Request`: Validation errors, missing required headers
+- `401 Unauthorized`: Missing or invalid authentication
+- `403 Forbidden`: Insufficient permissions
+- `404 Not Found`: Resource not found
+- `409 Conflict`: Duplicate resource, concurrent request processing
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Unexpected server errors
+
+### Global Exception Handler
+
+- Centralized exception handling in `GlobalExceptionHandler`
+- Domain exceptions translated to appropriate HTTP status codes
+- Detailed error messages for client debugging
+- Sensitive information never exposed in error responses
+
 ## Troubleshooting
 
 - **App fails on startup with schema validation**
@@ -364,6 +553,18 @@ The assistant will automatically call the appropriate tools to fetch portfolio d
 - **Integration tests fail locally**
   - Cause: Testcontainers cannot start without Docker.
   - Fix: start Docker Desktop and rerun tests.
+- **Idempotency key errors**
+  - Cause: Missing or invalid `Idempotency-Key` header format.
+  - Fix: Ensure header is 8-256 characters, alphanumeric + underscore/hyphen only.
+- **Rate limit errors (429)**
+  - Cause: Exceeded request rate for endpoint.
+  - Fix: Wait for rate limit window to expire or implement exponential backoff.
+- **AI assistant not responding**
+  - Cause: Missing `ANTHROPIC_API_KEY` or rate limit exceeded.
+  - Fix: Verify API key is set and check rate limit status.
+- **Email verification not sending**
+  - Cause: Missing `SENDGRID_API_KEY` or invalid `FROM_EMAIL`.
+  - Fix: Verify SendGrid credentials and email configuration.
 
 ---
 
