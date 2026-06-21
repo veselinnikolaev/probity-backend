@@ -47,7 +47,7 @@ The system transitioned from a coupled, monolithic structure to a domain-driven,
 │  - User aggregate with credential ownership invariants      │
 │  - JWT lifecycle management with refresh rotation           │
 │  - Timing-attack mitigation in password verification        │
-│  - Email verification for account activation                 │
+│  - Email verification for account activation                │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -81,24 +81,24 @@ The system transitioned from a coupled, monolithic structure to a domain-driven,
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│                Assistant Context                             │
-│  - AI-powered portfolio risk analyst with Spring AI        │
-│  - Tool calling for portfolio, risk, and market data       │
-│  - Redis-backed chat memory with 7-day TTL                 │
-│  - Rate-limited endpoint (10 req/60s per IP)               │
+│                Assistant Context                            │
+│  - AI-powered portfolio risk analyst with Spring AI         │
+│  - Tool calling for portfolio, risk, and market data        │
+│  - Redis-backed chat memory with 7-day TTL                  │
+│  - Rate-limited endpoint (10 req/60s per IP)                │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
 │                Settings Context                             │
-│  - User profile management (name, email)                   │
-│  - Preferences (currency, confidence level, time horizon)  │
-│  - Session management with device tracking                 │
-│  - Account deletion with data cleanup                      │
+│  - User profile management (name, email)                    │
+│  - Preferences (currency, confidence level, time horizon)   │
+│  - Session management with device tracking                  │
+│  - Account deletion with data cleanup                       │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
 │              Notification Context                           │
-│  - Email service for verification and notifications        │
+│  - Email service for verification and notifications         │
 │  - Secure token-based flows                                 │
 └─────────────────────────────────────────────────────────────┘
 ```
