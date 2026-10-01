@@ -1,8 +1,9 @@
 package me.veselin.probity.risk.port;
 
 import me.veselin.probity.marketdata.domain.PriceBar;
-import me.veselin.probity.portfolio.domain.PortfolioPosition;
+import me.veselin.probity.risk.dto.AssetRiskProfile;
 import me.veselin.probity.risk.dto.DistributionStatistics;
+import me.veselin.probity.risk.dto.PositionWeight;
 
 import java.util.List;
 import java.util.Map;
@@ -47,7 +48,7 @@ public interface RiskPort {
     /**
      * Risk score 0–100 combining asset type and volatility.
      */
-    int riskScore(String assetType, double annualisedVol);
+    int riskScore(AssetRiskProfile profile, double annualisedVol);
 
     /**
      * Human-readable risk level from a score.
@@ -65,7 +66,7 @@ public interface RiskPort {
      * Herfindahl–Hirschman Index — sum of squared weights.
      * Ranges 0 (perfectly diversified) to 1 (single position).
      */
-    double computeHHI(List<PortfolioPosition> positions,
+    double computeHHI(List<PositionWeight> positions,
                       Map<String, List<PriceBar>> barsByTicker);
 
     /**

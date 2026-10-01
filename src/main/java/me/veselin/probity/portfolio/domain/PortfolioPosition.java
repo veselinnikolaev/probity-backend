@@ -1,51 +1,27 @@
 package me.veselin.probity.portfolio.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import me.veselin.probity.common.audit.BaseEntitySoftDelete;
-import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Child entity of the `Portfolio` aggregate representing one held instrument.
  * Guarantees strictly positive quantity and weighted-average cost consistency.
+ * Pure domain class - no JPA annotations (split in Phase 1).
  */
-@Entity
-@Table(
-        name = "portfolio_positions",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uq_position_portfolio_asset",
-                columnNames = {"portfolio_id", "asset_id"}
-        )
-)
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED) // JPA + aggregate root access only
-@SQLRestriction("deleted = false")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PortfolioPosition extends BaseEntitySoftDelete {
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "portfolio_id", nullable = false, updatable = false)
     private Portfolio portfolio;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "asset_id", nullable = false, updatable = false)
     private Asset asset;
-
-    @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal quantity;
-
-    @Column(name = "avg_buy_price", precision = 19, scale = 4)
     private BigDecimal avgBuyPrice;
 
 
@@ -54,6 +30,20 @@ public class PortfolioPosition extends BaseEntitySoftDelete {
         this.asset = asset;
         this.quantity = validateQuantity(quantity);
         this.avgBuyPrice = price;
+    }
+
+    /**
+     * Public constructor for mapper to reconstruct from JPA without validation.
+     */
+    public PortfolioPosition(Portfolio portfolio, Asset asset, BigDecimal quantity, BigDecimal avgBuyPrice, UUID id, java.time.Instant createdAt, java.time.Instant updatedAt,	Long version) {
+        this.portfolio = portfolio;
+        this.asset = asset;
+        this.quantity = quantity;
+        this.avgBuyPrice = avgBuyPrice;
+        setId(id);
+        setCreatedAt(createdAt);
+        setUpdatedAt(updatedAt);
+        setVersion(version);
     }
 
 

@@ -17,6 +17,7 @@ import me.veselin.probity.portfolio.enumeration.DateRange;
 import me.veselin.probity.portfolio.enumeration.Sector;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioDashboardQueryPort;
 import me.veselin.probity.portfolio.service.portfolio.PortfolioDataHelper.PortfolioTimeSeries;
+import me.veselin.probity.risk.dto.AssetRiskProfile;
 import me.veselin.probity.risk.port.RiskPort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -176,7 +177,8 @@ public class PortfolioDashboardQueryService implements PortfolioDashboardQueryPo
             double vol = volByTicker.getOrDefault(ticker, 0.0);
             double volContribution = weight * vol / 100.0;
 
-            int score = riskPort.riskScore(pos.getAsset().getType().name(), vol);
+            AssetRiskProfile profile = new AssetRiskProfile(pos.getAsset().getType(), pos.getAsset().getType().getBaseRiskScore());
+            int score = riskPort.riskScore(profile, vol);
             String level = riskPort.riskLevel(score);
 
             return new PositionDto(

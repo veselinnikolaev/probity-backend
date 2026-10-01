@@ -3,6 +3,10 @@ package me.veselin.probity.simulation.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.common.config.TradingConfiguration;
+import me.veselin.probity.common.domain.event.DomainEventPublisher;
+import me.veselin.probity.common.domain.event.SimulationCompletedEvent;
+import me.veselin.probity.common.domain.event.SimulationFailedEvent;
+import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
 import me.veselin.probity.common.util.DataUtil;
 import me.veselin.probity.common.util.DateRangeUtil;
 import me.veselin.probity.marketdata.domain.PriceBar;
@@ -20,11 +24,12 @@ import me.veselin.probity.portfolio.service.portfolio.PortfolioValuationService;
 import me.veselin.probity.simulation.exception.EmptyPortfolioException;
 import me.veselin.probity.simulation.exception.SimulationNotFoundException;
 import me.veselin.probity.simulation.mapper.SimulationMapper;
-import me.veselin.probity.simulation.repository.SimulationRepository;
+import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -102,6 +107,7 @@ public class MonteCarloSimulationService {
     private final SimulationMapper simulationMapper;
     private final PortfolioValuationService portfolioValuationService;
     private final Executor simulationExecutor;
+    private final DomainEventPublisher domainEventPublisher;
 
     // ── Public API ────────────────────────────────────────────────────────
 
@@ -113,14 +119,47 @@ public class MonteCarloSimulationService {
         log.info("Running Monte Carlo simulation portfolioId={} userId={} paths={} horizon={}d",
                 portfolioId, userId, numberOfSimulations, timeHorizonDays);
 
-        SimulationContext context = loadAndValidatePortfolio(portfolioId, userId);
-        SimulationParameters params = prepareSimulationParameters(context.positions(), assumedReturnPercent, assumedVolatilityPercent);
-        SimulationPayload payload = executeSimulationRun(context, params, numberOfSimulations, timeHorizonDays, confidenceLevel);
+        // Publish requested event at start (before portfolio loading)
+        domainEventPublisher.publish(new SimulationRequestedEvent(
+                null, // simulationId not yet known
+                portfolioId,
+                userId,
+                numberOfSimulations,
+                timeHorizonDays,
+                confidenceLevel,
+                Instant.now()
+        ));
 
-        Simulation saved = persistResults(portfolioId, userId, context.currentValue(), payload, numberOfSimulations, timeHorizonDays, confidenceLevel, assumedReturnPercent, assumedVolatilityPercent);
+        try {
+            SimulationContext context = loadAndValidatePortfolio(portfolioId, userId);
+            SimulationParameters params = prepareSimulationParameters(context.positions(), assumedReturnPercent, assumedVolatilityPercent);
+            SimulationPayload payload = executeSimulationRun(context, params, numberOfSimulations, timeHorizonDays, confidenceLevel);
 
-        log.info("Simulation saved id={}", saved.getId());
-        return simulationMapper.toDto(saved);
+            Simulation saved = persistResults(portfolioId, userId, context.currentValue(), payload, numberOfSimulations, timeHorizonDays, confidenceLevel, assumedReturnPercent, assumedVolatilityPercent);
+
+            log.info("Simulation saved id={}", saved.getId());
+
+            // Publish completed event after successful persist
+            domainEventPublisher.publish(new SimulationCompletedEvent(
+                    saved.getId(),
+                    portfolioId,
+                    userId,
+                    context.currentValue(),
+                    Instant.now()
+            ));
+
+            return simulationMapper.toDto(saved);
+        } catch (Exception e) {
+            // Publish failed event on exception
+            domainEventPublisher.publish(new SimulationFailedEvent(
+                    portfolioId,
+                    userId,
+                    e.getMessage(),
+                    Instant.now()
+            ));
+            // Rethrow original exception
+            throw e;
+        }
     }
 
     /**

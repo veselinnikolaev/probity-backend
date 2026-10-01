@@ -2,7 +2,7 @@ package me.veselin.probity.simulation;
 
 import me.veselin.probity.portfolio.BasePortfolioIntegrationTest;
 import me.veselin.probity.risk.dto.DistributionStatistics;
-import me.veselin.probity.simulation.repository.SimulationRepository;
+import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 

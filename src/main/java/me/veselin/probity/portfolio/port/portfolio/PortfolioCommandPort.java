@@ -1,9 +1,9 @@
 package me.veselin.probity.portfolio.port.portfolio;
 
-import me.veselin.probity.bff.dto.portfolio.PositionCreateRequest;
-import me.veselin.probity.bff.dto.portfolio.PositionUpdateRequest;
+import me.veselin.probity.portfolio.dto.AddPositionCommand;
 import me.veselin.probity.portfolio.dto.PortfolioData;
 import me.veselin.probity.portfolio.dto.PositionCreatedDto;
+import me.veselin.probity.portfolio.dto.UpdatePositionCommand;
 
 import java.util.UUID;
 
@@ -20,12 +20,12 @@ public interface PortfolioCommandPort {
     /**
      * Adds a position to a portfolio and returns the created position identifier.
      */
-    PositionCreatedDto addPosition(UUID portfolioId, PositionCreateRequest request, UUID userId);
+    PositionCreatedDto addPosition(UUID portfolioId, AddPositionCommand request, UUID userId);
 
     /**
      * Updates the quantity of an existing position using the latest market price.
      */
-    void updatePosition(UUID portfolioId, UUID positionId, PositionUpdateRequest request, UUID userId);
+    void updatePosition(UUID portfolioId, UUID positionId, UpdatePositionCommand request, UUID userId);
 
     /**
      * Removes a position from the portfolio owned by the requesting user.

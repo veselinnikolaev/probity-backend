@@ -2,8 +2,10 @@ package me.veselin.probity.portfolio.service.portfolio;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import me.veselin.probity.bff.dto.portfolio.PositionCreateRequest;
-import me.veselin.probity.bff.dto.portfolio.PositionUpdateRequest;
+import me.veselin.probity.portfolio.dto.AddPositionCommand;
+import me.veselin.probity.portfolio.dto.UpdatePositionCommand;
+import me.veselin.probity.common.domain.event.DomainEventPublisher;
+import me.veselin.probity.common.domain.event.PortfolioUpdatedEvent;
 import me.veselin.probity.common.exception.ConflictException;
 import me.veselin.probity.marketdata.port.MarketDataPort;
 import me.veselin.probity.portfolio.domain.Asset;
@@ -14,12 +16,13 @@ import me.veselin.probity.portfolio.dto.PositionCreatedDto;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
 import me.veselin.probity.portfolio.exception.PositionNotFoundException;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioCommandPort;
-import me.veselin.probity.portfolio.repository.PortfolioRepository;
+import me.veselin.probity.portfolio.persistence.PortfolioRepository;
 import me.veselin.probity.portfolio.service.asset.AssetResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 @Service
@@ -34,6 +37,7 @@ public class PortfolioCommandService implements PortfolioCommandPort {
     private final PortfolioRepository portfolioRepository;
     private final AssetResolver assetResolver;
     private final MarketDataPort marketDataPort;
+    private final DomainEventPublisher domainEventPublisher;
 
     /**
      * Creates a portfolio for a user while enforcing unique portfolio names per owner.
@@ -44,6 +48,7 @@ public class PortfolioCommandService implements PortfolioCommandPort {
             throw new ConflictException("Portfolio '" + name + "' already exists");
         }
         Portfolio saved = portfolioRepository.save(Portfolio.create(name, userId));
+        domainEventPublisher.publish(new PortfolioUpdatedEvent(saved.getId(), userId, Instant.now()));
         return new PortfolioData(saved.getId().toString(), saved.getName(), saved.getDescription());
     }
 
@@ -52,7 +57,7 @@ public class PortfolioCommandService implements PortfolioCommandPort {
      */
     @Override
     public PositionCreatedDto addPosition(UUID portfolioId,
-                                          PositionCreateRequest request,
+                                          AddPositionCommand request,
                                           UUID userId) {
 
         Portfolio portfolio = portfolioRepository.findByIdWithPositions(portfolioId)
@@ -66,14 +71,16 @@ public class PortfolioCommandService implements PortfolioCommandPort {
         BigDecimal currentPrice = marketDataPort.getLatestPrice(asset.getTicker());
 
         portfolio.addPosition(asset, request.quantity(), currentPrice);
-        portfolioRepository.saveAndFlush(portfolio);
+        portfolioRepository.saveWithPositionsAndFlush(portfolio);
 
-        // Re-fetch the position after flush so the ID is guaranteed to be populated
+        // Position ID is now populated in the domain object after save
         PortfolioPosition position = portfolio.getPositions().stream()
                 .filter(p -> p.getAsset().getId().equals(asset.getId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException(
                         "Position not found after save for asset: " + asset.getTicker()));
+
+        domainEventPublisher.publish(new PortfolioUpdatedEvent(portfolioId, userId, Instant.now()));
 
         return new PositionCreatedDto(
                 position.getId().toString(),
@@ -87,7 +94,7 @@ public class PortfolioCommandService implements PortfolioCommandPort {
      */
     @Override
     public void updatePosition(UUID portfolioId, UUID positionId,
-                               PositionUpdateRequest request, UUID userId) {
+                               UpdatePositionCommand request, UUID userId) {
         Portfolio portfolio = portfolioRepository.findByIdWithPositions(portfolioId)
                 .orElseThrow(() -> new PortfolioNotFoundException("Portfolio not found: " + portfolioId + " for user: " + userId));
 
@@ -103,7 +110,8 @@ public class PortfolioCommandService implements PortfolioCommandPort {
         BigDecimal currentPrice = marketDataPort.getLatestPrice(pos.getAsset().getTicker());
 
         portfolio.updatePositionQuantity(positionId, request.quantity(), currentPrice);
-        portfolioRepository.save(portfolio);
+        portfolioRepository.saveWithPositionsAndFlush(portfolio);
+        domainEventPublisher.publish(new PortfolioUpdatedEvent(portfolioId, userId, Instant.now()));
     }
 
     /**
@@ -119,7 +127,8 @@ public class PortfolioCommandService implements PortfolioCommandPort {
         }
 
         portfolio.removePosition(positionId);
-        portfolioRepository.save(portfolio);
+        portfolioRepository.saveWithPositionsAndFlush(portfolio);
+        domainEventPublisher.publish(new PortfolioUpdatedEvent(portfolioId, userId, Instant.now()));
     }
 
     @Override
@@ -138,6 +147,7 @@ public class PortfolioCommandService implements PortfolioCommandPort {
 
         portfolio.update(name, description);
         Portfolio saved = portfolioRepository.save(portfolio);
+        domainEventPublisher.publish(new PortfolioUpdatedEvent(saved.getId(), userId, Instant.now()));
         return new PortfolioData(saved.getId().toString(), saved.getName(), saved.getDescription());
     }
 
@@ -152,5 +162,6 @@ public class PortfolioCommandService implements PortfolioCommandPort {
 
         portfolio.softDelete();
         portfolioRepository.save(portfolio);
+        domainEventPublisher.publish(new PortfolioUpdatedEvent(portfolioId, userId, Instant.now()));
     }
 }

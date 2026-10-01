@@ -12,8 +12,10 @@ import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.bff.dto.portfolio.*;
 import me.veselin.probity.bff.security.filter.jwt.UserPrincipal;
 import me.veselin.probity.common.util.ApiRoutes;
+import me.veselin.probity.portfolio.dto.AddPositionCommand;
 import me.veselin.probity.portfolio.dto.PortfolioData;
 import me.veselin.probity.portfolio.dto.PositionCreatedDto;
+import me.veselin.probity.portfolio.dto.UpdatePositionCommand;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioCommandPort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -163,7 +165,8 @@ public class PortfolioCommandController {
             UriComponentsBuilder ucb) {
 
         log.info("Adding position to portfolio: {}, ticker: {}, quantity: {}", id, request.ticker(), request.quantity());
-        PositionCreatedDto created = portfolioCommandPort.addPosition(id, request, principal.id());
+        AddPositionCommand command = new AddPositionCommand(request.ticker(), request.quantity());
+        PositionCreatedDto created = portfolioCommandPort.addPosition(id, command, principal.id());
 
         URI location = ucb.path(ApiRoutes.Portfolios.POSITION)
                 .buildAndExpand(id, created.id())
@@ -200,7 +203,8 @@ public class PortfolioCommandController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         log.info("Updating position: {} in portfolio: {}, quantity: {}", positionId, id, request.quantity());
-        portfolioCommandPort.updatePosition(id, positionId, request, principal.id());
+        UpdatePositionCommand command = new UpdatePositionCommand(request.quantity());
+        portfolioCommandPort.updatePosition(id, positionId, command, principal.id());
         log.info("Position updated successfully: {}", positionId);
         return ResponseEntity.noContent().build();
     }

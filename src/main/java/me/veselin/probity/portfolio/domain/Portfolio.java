@@ -1,18 +1,10 @@
 package me.veselin.probity.portfolio.domain;
 
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.Index;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import me.veselin.probity.common.audit.BaseEntitySoftDelete;
 import me.veselin.probity.portfolio.exception.PositionNotFoundException;
-import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -24,32 +16,15 @@ import java.util.UUID;
 /**
  * Aggregate root for the portfolio bounded context.
  * Enforces ownership and positive-position invariants for portfolio holdings.
+ * Pure domain class - no JPA annotations (split in Phase 1).
  */
-@Entity
-@Table(
-        name = "portfolios",
-        indexes = @Index(name = "idx_portfolio_user_id", columnList = "user_id")
-)
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED) // JPA requirement only
-@SQLRestriction("deleted = false")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Portfolio extends BaseEntitySoftDelete {
 
-    @Column(nullable = false)
     private String name;
-
-    @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
-
-    @Column(length = 500)
     private String description;
-
-    @OneToMany(
-            mappedBy = "portfolio",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true,
-            fetch = FetchType.LAZY
-    )
     private final List<PortfolioPosition> positions = new ArrayList<>();
 
 
@@ -175,6 +150,14 @@ public class Portfolio extends BaseEntitySoftDelete {
 
     public List<PortfolioPosition> getPositions() {
         return Collections.unmodifiableList(positions);
+    }
+
+    /**
+     * Package-private accessor for mapper to add positions without validation.
+     * Used by PortfolioMapper.toDomain() to reconstruct domain from JPA.
+     */
+    public List<PortfolioPosition> getPositionsInternal() {
+        return positions;
     }
 
 

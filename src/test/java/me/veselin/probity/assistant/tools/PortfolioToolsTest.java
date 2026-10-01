@@ -5,7 +5,7 @@ import me.veselin.probity.portfolio.port.portfolio.PortfolioDashboardQueryPort;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioQueryPort;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioRiskQueryPort;
 import me.veselin.probity.simulation.mapper.SimulationMapper;
-import me.veselin.probity.simulation.repository.SimulationRepository;
+import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

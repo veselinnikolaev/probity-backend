@@ -3,6 +3,9 @@ target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+.env
+.env.prod
+graphify-out/
 
 ### STS ###
 .apt_generated
@@ -18,8 +21,6 @@ target/
 *.iws
 *.iml
 *.ipr
-.env
-.env.prod
 
 ### NetBeans ###
 /nbproject/private/

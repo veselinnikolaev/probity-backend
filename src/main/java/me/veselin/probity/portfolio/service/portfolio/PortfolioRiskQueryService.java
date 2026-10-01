@@ -15,6 +15,7 @@ import me.veselin.probity.portfolio.dto.VolatilityPointDto;
 import me.veselin.probity.portfolio.enumeration.DateRange;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioRiskQueryPort;
 import me.veselin.probity.portfolio.service.portfolio.PortfolioDataHelper.PortfolioTimeSeries;
+import me.veselin.probity.risk.dto.PositionWeight;
 import me.veselin.probity.risk.port.RiskPort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,7 +66,16 @@ public class PortfolioRiskQueryService implements PortfolioRiskQueryPort {
         List<Double> returns = ts.returns();
 
         double maxDrawdown = riskPort.maxDrawdown(values);
-        double concentration = riskPort.computeHHI(positions, ts.barsByTicker());
+        List<PositionWeight> positionWeights = positions.stream()
+                .map(p -> new PositionWeight(
+                        p.getAsset().getTicker(),
+                        p.getQuantity(),
+                        ts.barsByTicker().getOrDefault(p.getAsset().getTicker(), List.of()).isEmpty()
+                                ? java.math.BigDecimal.ZERO
+                                : ts.barsByTicker().get(p.getAsset().getTicker()).getLast().getAdjClose()
+                ))
+                .toList();
+        double concentration = riskPort.computeHHI(positionWeights, ts.barsByTicker());
 
         // Beta stubbed until benchmark series is wired — returns neutral 1.0
         double beta = 1.0;

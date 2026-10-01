@@ -8,7 +8,7 @@ import me.veselin.probity.portfolio.port.portfolio.PortfolioDashboardQueryPort;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioQueryPort;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioRiskQueryPort;
 import me.veselin.probity.simulation.mapper.SimulationMapper;
-import me.veselin.probity.simulation.repository.SimulationRepository;
+import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Service;
 

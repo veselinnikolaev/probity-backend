@@ -4,8 +4,6 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
@@ -18,9 +16,6 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.type.SqlTypes;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
 
 /**
@@ -53,9 +48,6 @@ public class Asset extends BaseEntityWithActive {
     @Column(nullable = false)
     private AssetType type;
 
-    @OneToMany(mappedBy = "asset", fetch = FetchType.LAZY)
-    private final List<PortfolioPosition> positions = new ArrayList<>();
-
 
     public static Asset create(String ticker, String name, Sector sector, AssetType type) {
         Asset asset = new Asset();
@@ -64,11 +56,6 @@ public class Asset extends BaseEntityWithActive {
         asset.sector = Objects.requireNonNull(sector, "sector must not be null");
         asset.type   = Objects.requireNonNull(type,   "type must not be null");
         return asset;
-    }
-
-
-    public List<PortfolioPosition> getPositions() {
-        return Collections.unmodifiableList(positions);
     }
 
 

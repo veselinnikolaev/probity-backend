@@ -3,6 +3,7 @@ package me.veselin.probity.risk.service;
 import me.veselin.probity.common.config.TradingConfiguration;
 import me.veselin.probity.common.util.DataUtil;
 import me.veselin.probity.portfolio.enumeration.AssetType;
+import me.veselin.probity.risk.dto.AssetRiskProfile;
 import me.veselin.probity.risk.enumeration.RiskLevel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -316,30 +317,34 @@ class RiskCalculatorTest {
 
     @Test
     void riskScore_clampedToOneHundred_forExtremeVol() {
-        assertThat(calculator.riskScore(AssetType.CRYPTO.name(), 999.0)).isEqualTo(100);
+        AssetRiskProfile profile = new AssetRiskProfile(AssetType.CRYPTO, AssetType.CRYPTO.getBaseRiskScore());
+        assertThat(calculator.riskScore(profile, 999.0)).isEqualTo(100);
     }
 
     @Test
     void riskScore_equalsBaseScore_whenVolAtOrBelow15Pct() {
         int base = AssetType.STOCK.getBaseRiskScore();
+        AssetRiskProfile profile = new AssetRiskProfile(AssetType.STOCK, base);
         // vol = 15 → addon = 0
-        assertThat(calculator.riskScore(AssetType.STOCK.name(), 15.0)).isEqualTo(base);
+        assertThat(calculator.riskScore(profile, 15.0)).isEqualTo(base);
         // vol < 15 → also no addon
-        assertThat(calculator.riskScore(AssetType.STOCK.name(), 10.0)).isEqualTo(base);
+        assertThat(calculator.riskScore(profile, 10.0)).isEqualTo(base);
     }
 
     @Test
     void riskScore_increasesAboveBase_whenVolExceeds15Pct() {
         int base = AssetType.STOCK.getBaseRiskScore();
-        int score = calculator.riskScore(AssetType.STOCK.name(), 25.0);
+        AssetRiskProfile profile = new AssetRiskProfile(AssetType.STOCK, base);
+        int score = calculator.riskScore(profile, 25.0);
         assertThat(score).isGreaterThan(base);
     }
 
     @Test
     void riskScore_increasesMonotonically_withRisingVol() {
-        int s1 = calculator.riskScore(AssetType.STOCK.name(), 20.0);
-        int s2 = calculator.riskScore(AssetType.STOCK.name(), 35.0);
-        int s3 = calculator.riskScore(AssetType.STOCK.name(), 50.0);
+        AssetRiskProfile profile = new AssetRiskProfile(AssetType.STOCK, AssetType.STOCK.getBaseRiskScore());
+        int s1 = calculator.riskScore(profile, 20.0);
+        int s2 = calculator.riskScore(profile, 35.0);
+        int s3 = calculator.riskScore(profile, 50.0);
         assertThat(s1).isLessThanOrEqualTo(s2);
         assertThat(s2).isLessThanOrEqualTo(s3);
     }
@@ -347,8 +352,10 @@ class RiskCalculatorTest {
     @Test
     void riskScore_cryptoBaseScore_isHigherThanStockBaseScore() {
         // At equal vol the more volatile asset class should start higher
-        int stockScore = calculator.riskScore(AssetType.STOCK.name(), 10.0);
-        int cryptoScore = calculator.riskScore(AssetType.CRYPTO.name(), 10.0);
+        AssetRiskProfile stockProfile = new AssetRiskProfile(AssetType.STOCK, AssetType.STOCK.getBaseRiskScore());
+        AssetRiskProfile cryptoProfile = new AssetRiskProfile(AssetType.CRYPTO, AssetType.CRYPTO.getBaseRiskScore());
+        int stockScore = calculator.riskScore(stockProfile, 10.0);
+        int cryptoScore = calculator.riskScore(cryptoProfile, 10.0);
         assertThat(cryptoScore).isGreaterThan(stockScore);
     }
 

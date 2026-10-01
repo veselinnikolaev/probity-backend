@@ -9,7 +9,7 @@ import me.veselin.probity.portfolio.domain.PortfolioPosition;
 import me.veselin.probity.portfolio.dto.PortfolioDto;
 import me.veselin.probity.portfolio.exception.PortfolioNotFoundException;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioQueryPort;
-import me.veselin.probity.portfolio.repository.PortfolioRepository;
+import me.veselin.probity.portfolio.persistence.PortfolioRepository;
 import me.veselin.probity.portfolio.service.portfolio.PortfolioDataHelper.PortfolioTimeSeries;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;

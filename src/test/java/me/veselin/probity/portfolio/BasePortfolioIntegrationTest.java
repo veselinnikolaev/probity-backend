@@ -9,7 +9,8 @@ import me.veselin.probity.portfolio.domain.Portfolio;
 import me.veselin.probity.portfolio.enumeration.AssetType;
 import me.veselin.probity.portfolio.enumeration.Sector;
 import me.veselin.probity.portfolio.repository.AssetRepository;
-import me.veselin.probity.portfolio.repository.PortfolioRepository;
+import me.veselin.probity.portfolio.persistence.PortfolioRepository;
+import me.veselin.probity.risk.dto.AssetRiskProfile;
 import me.veselin.probity.risk.enumeration.RiskLevel;
 import me.veselin.probity.risk.port.RiskPort;
 import org.junit.jupiter.api.AfterEach;
@@ -62,7 +63,7 @@ public abstract class BasePortfolioIntegrationTest extends BaseAuthIntegrationTe
         Portfolio portfolio = Portfolio.create("Test Portfolio", userId);
         portfolio.addPosition(apple,  new BigDecimal("10"), new BigDecimal("148.00"));
         portfolio.addPosition(google, new BigDecimal("5"),  new BigDecimal("130.00"));
-        portfolioRepository.save(portfolio);
+        portfolio = portfolioRepository.save(portfolio);
 
         portfolioId = portfolio.getId().toString();
         positionId  = portfolio.getPositions().getFirst().getId().toString();
@@ -128,7 +129,8 @@ public abstract class BasePortfolioIntegrationTest extends BaseAuthIntegrationTe
         when(riskPort.rollingVolatility(any(), anyInt())).thenReturn(List.of(0.15, 0.16, 0.17));
         when(riskPort.rollingVolatilityFromReturns(any(), anyInt())).thenReturn(List.of(0.15, 0.16, 0.17));
         when(riskPort.toDailyReturns(any())).thenReturn(List.of(0.01, -0.005, 0.008));
-        when(riskPort.riskScore(anyString(), anyDouble())).thenReturn(55);
+        AssetRiskProfile profile = new AssetRiskProfile(AssetType.STOCK, AssetType.STOCK.getBaseRiskScore());
+        when(riskPort.riskScore(any(AssetRiskProfile.class), anyDouble())).thenReturn(55);
         when(riskPort.riskLevel(anyInt())).thenReturn(RiskLevel.MODERATE.name());
         when(riskPort.maxDrawdown(any())).thenReturn(-0.05);
     }

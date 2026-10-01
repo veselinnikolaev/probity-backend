@@ -5,9 +5,10 @@ import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.common.config.TradingConfiguration;
 import me.veselin.probity.common.util.DataUtil;
 import me.veselin.probity.marketdata.domain.PriceBar;
-import me.veselin.probity.portfolio.domain.PortfolioPosition;
 import me.veselin.probity.portfolio.enumeration.AssetType;
+import me.veselin.probity.risk.dto.AssetRiskProfile;
 import me.veselin.probity.risk.dto.DistributionStatistics;
+import me.veselin.probity.risk.dto.PositionWeight;
 import me.veselin.probity.risk.enumeration.RiskLevel;
 import me.veselin.probity.risk.port.RiskPort;
 import org.springframework.stereotype.Service;
@@ -99,8 +100,8 @@ public class RiskCalculator implements RiskPort {
     }
 
     @Override
-    public int riskScore(String assetType, double annualisedVol) {
-        int base = AssetType.valueOf(assetType.toUpperCase()).getBaseRiskScore();
+    public int riskScore(AssetRiskProfile profile, double annualisedVol) {
+        int base = profile.type().getBaseRiskScore();
         int volAddon = annualisedVol <= tradingConfig.getVolatilityThreshold()
                 ? 0
                 : (int) ((annualisedVol - tradingConfig.getVolatilityThreshold()) / tradingConfig.getVolatilityAddonFactor() * tradingConfig.getRiskScoreIncrement());
@@ -126,7 +127,7 @@ public class RiskCalculator implements RiskPort {
     }
 
     @Override
-    public double computeHHI(List<PortfolioPosition> positions,
+    public double computeHHI(List<PositionWeight> positions,
                              Map<String, List<PriceBar>> barsByTicker) {
         Map<String, Double> latestPrices = barsByTicker.entrySet().stream()
                 .filter(e -> !e.getValue().isEmpty())
@@ -136,16 +137,16 @@ public class RiskCalculator implements RiskPort {
                 ));
 
         double total = positions.stream()
-                .mapToDouble(p -> latestPrices.getOrDefault(p.getAsset().getTicker(), 0.0)
-                        * p.getQuantity().doubleValue())
+                .mapToDouble(p -> latestPrices.getOrDefault(p.ticker(), 0.0)
+                        * p.quantity().doubleValue())
                 .sum();
 
         if (total == 0.0) return 0.0;
 
         return positions.stream()
                 .mapToDouble(p -> {
-                    double val = latestPrices.getOrDefault(p.getAsset().getTicker(), 0.0)
-                            * p.getQuantity().doubleValue();
+                    double val = latestPrices.getOrDefault(p.ticker(), 0.0)
+                            * p.quantity().doubleValue();
                     double w = val / total;
                     return w * w;
                 })
