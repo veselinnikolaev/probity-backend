@@ -19,4 +19,7 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
 
     @Query("SELECT s FROM SimulationJpaEntity s WHERE s.portfolioId = :portfolioId AND s.userId = :userId AND s.deleted = false ORDER BY s.createdAt DESC")
     List<SimulationJpaEntity> findByPortfolioIdAndUserId(@Param("portfolioId") UUID portfolioId, @Param("userId") UUID userId);
+
+    @Query("SELECT s FROM SimulationJpaEntity s WHERE s.userId = :userId AND s.status = :status AND s.deleted = false")
+    List<SimulationJpaEntity> findByUserIdAndStatus(@Param("userId") UUID userId, @Param("status") String status);
 }

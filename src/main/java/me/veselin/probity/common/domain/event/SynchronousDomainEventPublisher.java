@@ -3,6 +3,7 @@ package me.veselin.probity.common.domain.event;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 /**
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
  * Delegates to Spring's ApplicationEventPublisher for listener discovery and invocation.
  */
 @Component
+@Primary
 @RequiredArgsConstructor
 @Slf4j
 public class SynchronousDomainEventPublisher implements DomainEventPublisher {

@@ -109,6 +109,23 @@ spring:
           min-idle: 1
           max-wait: 1000ms
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: probity-simulation-worker
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "me.veselin.probity.common.domain.event"
+        max.poll.records: 1
+        max.poll.interval.ms: 300000
+    listener:
+      ack-mode: manual_immediate
+
   ai:
     anthropic:
       api-key: ${ANTHROPIC_API_KEY}

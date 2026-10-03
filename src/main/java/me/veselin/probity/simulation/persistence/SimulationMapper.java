@@ -1,17 +1,17 @@
 package me.veselin.probity.simulation.persistence;
 
 import me.veselin.probity.simulation.domain.Simulation;
+import me.veselin.probity.simulation.domain.SimulationStatus;
 
 /**
  * Mapper between domain Simulation and JPA SimulationJpaEntity.
- * Handles bidirectional conversion (create only - no update path needed).
+ * Handles bidirectional conversion for create and update.
  */
 public class SimulationMapper {
 
     /**
-     * Converts a domain Simulation to a JPA entity for creation.
-     * Creates a fresh entity - used only for new aggregates.
-     * No update path needed - Simulation is never loaded and re-saved.
+     * Converts a domain Simulation to a JPA entity for creation or update.
+     * Includes the domain ID so that JPA can merge on existing entities.
      */
     public static SimulationJpaEntity toJpaEntity(Simulation domain) {
         return SimulationJpaEntity.builder()
@@ -24,6 +24,7 @@ public class SimulationMapper {
                 .assumedVolatilityPct(domain.getAssumedVolatilityPct())
                 .currentPortfolioValue(domain.getCurrentPortfolioValue())
                 .resultPayload(domain.getResultPayload())
+                .status(domain.getStatus() != null ? domain.getStatus().name() : SimulationStatus.PENDING.name())
                 .build();
     }
 
@@ -42,6 +43,7 @@ public class SimulationMapper {
                 .assumedVolatilityPct(entity.getAssumedVolatilityPct())
                 .currentPortfolioValue(entity.getCurrentPortfolioValue())
                 .resultPayload(entity.getResultPayload())
+                .status(entity.getStatus() != null ? SimulationStatus.valueOf(entity.getStatus()) : SimulationStatus.PENDING)
                 .build();
         domain.setId(entity.getId());
         domain.setCreatedAt(entity.getCreatedAt());

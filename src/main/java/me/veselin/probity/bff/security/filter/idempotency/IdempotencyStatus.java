@@ -13,6 +13,12 @@ public enum IdempotencyStatus {
     PENDING,
 
     /**
+     * Request has been picked up by a worker and is actively being processed.
+     * Used for async Kafka consumers to prevent duplicate execution on redelivery.
+     */
+    PROCESSING,
+
+    /**
      * Request completed successfully.
      * Subsequent requests with the same key will receive the cached response.
      */

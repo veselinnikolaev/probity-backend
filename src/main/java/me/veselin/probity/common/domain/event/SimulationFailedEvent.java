@@ -7,6 +7,7 @@ import java.util.UUID;
  * Event published when a simulation fails during execution.
  */
 public record SimulationFailedEvent(
+    UUID simulationId,
     UUID portfolioId,
     UUID userId,
     String errorMessage,

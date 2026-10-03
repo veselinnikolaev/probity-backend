@@ -1,7 +1,7 @@
 spring:
   docker:
     compose:
-      enabled: true
+      enabled: false
   datasource:
     hikari:
       maximum-pool-size: 5

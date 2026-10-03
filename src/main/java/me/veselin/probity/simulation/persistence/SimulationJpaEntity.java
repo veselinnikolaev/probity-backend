@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import me.veselin.probity.common.audit.BaseEntitySoftDelete;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -28,6 +29,7 @@ import java.util.UUID;
         }
 )
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -74,11 +76,15 @@ public class SimulationJpaEntity extends BaseEntitySoftDelete {
      * Full GBM result stored as JSONB.
      * Shape: { statistics, outcomes, percentileSeries, allPaths, distribution }
      * Mirrors the frontend SimulationResult type exactly for zero-transform serialisation.
+     * NULL for PENDING/PROCESSING simulations that haven't completed yet.
      */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "result_payload", nullable = false, updatable = false,
+    @Column(name = "result_payload", updatable = false,
             columnDefinition = "jsonb")
     private me.veselin.probity.simulation.domain.SimulationPayload resultPayload;
+
+    @Column(name = "status", nullable = false, length = 20)
+    private String status;
 
     @Override
     public boolean equals(Object o) {

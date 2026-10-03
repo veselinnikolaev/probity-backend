@@ -143,7 +143,17 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
     @Test
     void run_emptyPortfolio_returns400() throws Exception {
         AuthResult auth = login();
-        String emptyPortfolioId = createPortfolio(auth, "Empty Simulation Portfolio");
+        // Create portfolio without adding a position
+        String response = mockMvc.perform(withCsrf(post(ApiRoutes.Portfolios.PORTFOLIOS)
+                        .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-empty-portfolio")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Empty Simulation Portfolio"}
+                                """)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String emptyPortfolioId = objectMapper.readTree(response).get("id").asText();
 
         mockMvc.perform(withCsrf(post(ApiRoutes.Simulations.RUN)
                         .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
@@ -418,6 +428,22 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
 
-        return objectMapper.readTree(response).get("id").asText();
+        String portfolioId = objectMapper.readTree(response).get("id").asText();
+
+        // Add a position to make the portfolio valid for simulation
+        mockMvc.perform(withCsrf(post(ApiRoutes.Portfolios.POSITIONS, portfolioId)
+                        .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken()))
+                        .header("Idempotency-Key", "test-key-position-" + name.hashCode())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "ticker": "AAPL",
+                                  "quantity": 10,
+                                  "averageBuyPrice": 150.00
+                                }
+                                """)))
+                .andExpect(status().isCreated());
+
+        return portfolioId;
     }
 }

@@ -38,10 +38,6 @@ public class YahooFinanceAdapter implements FinanceAdapter {
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
-    private static final String QUOTE_SUMMARY_URL =
-            "https://query1.finance.yahoo.com/v11/finance/quoteSummary/%s" +
-                    "?modules=quoteType,assetProfile";
-
     @Override
     public List<PriceBarDto> fetchDailyBars(String ticker, LocalDate from, LocalDate to) {
         long period1 = from.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
@@ -63,39 +59,46 @@ public class YahooFinanceAdapter implements FinanceAdapter {
 
     @Override
     public Optional<AssetMetadataDto> fetchMetadata(String ticker) {
-        String url = String.format(QUOTE_SUMMARY_URL, ticker.toUpperCase());
-        log.debug("Fetching metadata ticker={} url={}", ticker, url);
+        // Use the same chart endpoint as fetchDailyBars for metadata.
+        // The /v8/finance/chart endpoint works reliably and returns meta in chart.result[0].meta
+        long period1 = 0L; // epoch start for full history
+        long period2 = Instant.now().getEpochSecond();
+        String url = String.format(BASE_URL, ticker, period1, period2);
+
+        log.debug("Fetching metadata from chart endpoint ticker={} url={}", ticker, url);
 
         try {
             JsonNode root = fetchWithHeaders(url);
+            validateResponse(root, ticker);
 
-            if (root == null) return Optional.empty();
+            JsonNode result = root.path("chart").path("result").get(0);
+            JsonNode meta = result.path("meta");
 
-            JsonNode result = root.path("quoteSummary").path("result");
-            if (result.isMissingNode() || result.isNull()
-                    || !result.isArray() || result.isEmpty()) {
-                log.warn("No quoteSummary result for ticker={}", ticker);
+            if (meta.isMissingNode() || meta.isNull()) {
+                log.warn("No meta in chart response for ticker={}", ticker);
                 return Optional.empty();
             }
 
-            JsonNode first     = result.get(0);
-            JsonNode quoteType = first.path("quoteType");
-            JsonNode profile   = first.path("assetProfile");
+            String symbol   = meta.path("symbol").asText(ticker.toUpperCase());
+            String longName = meta.path("longName").asText(null);
+            String shortName = meta.path("shortName").asText(null);
 
             // longName is preferred; shortName is fallback
-            String name = quoteType.path("longName").asText(null);
+            String name = (longName != null && !longName.isBlank()) ? longName : shortName;
             if (name == null || name.isBlank()) {
-                name = quoteType.path("shortName").asText(ticker);
+                name = symbol;
             }
 
-            String type   = quoteType.path("quoteType").asText("EQUITY");
-            String sector = profile.path("sector").asText(null); // null for ETF/CRYPTO
+            String type = meta.path("instrumentType").asText("EQUITY");
 
-            log.debug("Resolved metadata ticker={} name='{}' type={} sector={}",
+            // Chart meta does NOT contain sector — leave as null (not available from this endpoint)
+            String sector = null;
+
+            log.debug("Resolved metadata from chart ticker={} name='{}' type={} sector={}",
                     ticker, name, type, sector);
 
             return Optional.of(new AssetMetadataDto(
-                    ticker.toUpperCase(), name, type, sector));
+                    symbol, name, type, sector));
 
         } catch (Exception e) {
             log.warn("fetchMetadata failed for ticker={}: {}", ticker, e.getMessage());

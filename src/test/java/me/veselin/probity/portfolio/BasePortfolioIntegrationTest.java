@@ -35,7 +35,6 @@ import static org.mockito.Mockito.when;
  *  - Two distinct tickers exist → correlation matrix is 2×2
  *  - Weights are split between two positions → weight assertions are non-trivial
  */
-@Transactional
 public abstract class BasePortfolioIntegrationTest extends BaseAuthIntegrationTest {
 
     @Autowired protected PortfolioRepository portfolioRepository;
@@ -74,6 +73,7 @@ public abstract class BasePortfolioIntegrationTest extends BaseAuthIntegrationTe
 
     @AfterEach
     void cleanDb() {
+        // Delete portfolios before assets to maintain foreign key order
         portfolioRepository.deleteAll();
         assetRepository.deleteAll();
     }

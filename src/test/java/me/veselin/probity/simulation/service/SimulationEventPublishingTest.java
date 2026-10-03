@@ -5,7 +5,6 @@ import me.veselin.probity.auth.repository.UserRepository;
 import me.veselin.probity.common.domain.event.DomainEvent;
 import me.veselin.probity.common.domain.event.SimulationCompletedEvent;
 import me.veselin.probity.common.domain.event.SimulationFailedEvent;
-import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
 import me.veselin.probity.common.domain.event.TestEventCapture;
 import me.veselin.probity.portfolio.domain.Portfolio;
 import me.veselin.probity.portfolio.persistence.PortfolioRepository;
@@ -44,7 +43,7 @@ public class SimulationEventPublishingTest extends BaseSimulationIntegrationTest
     }
 
     @Test
-    void runSimulation_firesSimulationRequestedAndCompletedEvents() {
+    void runSimulation_firesSimulationCompletedEvent() {
         // Arrange - use seeded portfolio from base class
         UUID portfolioUuid = UUID.fromString(portfolioId);
         UUID userId = userRepository.findByUsername(ADMIN_USERNAME)
@@ -54,23 +53,13 @@ public class SimulationEventPublishingTest extends BaseSimulationIntegrationTest
         // Act
         monteCarloSimulationService.run(portfolioUuid, 100, 5, 0.95, null, null, userId);
 
-        // Assert
+        // Assert - only SimulationCompletedEvent is published for sync path
         List<DomainEvent> events = testEventCapture.getCapturedEvents();
-        assertThat(events).hasSize(2);
+        assertThat(events).hasSize(1);
 
-        // First event should be SimulationRequestedEvent
-        assertThat(events.get(0)).isInstanceOf(SimulationRequestedEvent.class);
-        SimulationRequestedEvent requestedEvent = (SimulationRequestedEvent) events.get(0);
-        assertThat(requestedEvent.portfolioId()).isEqualTo(portfolioUuid);
-        assertThat(requestedEvent.userId()).isEqualTo(userId);
-        assertThat(requestedEvent.numberOfSimulations()).isEqualTo(100);
-        assertThat(requestedEvent.timeHorizonDays()).isEqualTo(5);
-        assertThat(requestedEvent.confidenceLevel()).isEqualTo(0.95);
-        assertThat(requestedEvent.occurredAt()).isNotNull();
-
-        // Second event should be SimulationCompletedEvent
-        assertThat(events.get(1)).isInstanceOf(SimulationCompletedEvent.class);
-        SimulationCompletedEvent completedEvent = (SimulationCompletedEvent) events.get(1);
+        // Event should be SimulationCompletedEvent
+        assertThat(events.get(0)).isInstanceOf(SimulationCompletedEvent.class);
+        SimulationCompletedEvent completedEvent = (SimulationCompletedEvent) events.get(0);
         assertThat(completedEvent.portfolioId()).isEqualTo(portfolioUuid);
         assertThat(completedEvent.userId()).isEqualTo(userId);
         assertThat(completedEvent.simulationId()).isNotNull();
@@ -79,7 +68,7 @@ public class SimulationEventPublishingTest extends BaseSimulationIntegrationTest
     }
 
     @Test
-    void runSimulationWithEmptyPortfolio_firesSimulationRequestedAndFailedEventsAndRethrowsException() {
+    void runSimulationWithEmptyPortfolio_firesSimulationFailedEventAndRethrowsException() {
         // Arrange - create empty portfolio
         UUID userId = userRepository.findByUsername(ADMIN_USERNAME)
                 .map(User::getId)
@@ -94,21 +83,16 @@ public class SimulationEventPublishingTest extends BaseSimulationIntegrationTest
         ).isInstanceOf(me.veselin.probity.simulation.exception.EmptyPortfolioException.class)
                 .hasMessageContaining("has no positions");
 
-        // Verify events were published
+        // Verify events were published - only SimulationFailedEvent for sync failure
         List<DomainEvent> events = testEventCapture.getCapturedEvents();
-        assertThat(events).hasSize(2);
+        assertThat(events).hasSize(1);
 
-        // First event should be SimulationRequestedEvent
-        assertThat(events.get(0)).isInstanceOf(SimulationRequestedEvent.class);
-        SimulationRequestedEvent requestedEvent = (SimulationRequestedEvent) events.get(0);
-        assertThat(requestedEvent.portfolioId()).isEqualTo(savedPortfolio.getId());
-        assertThat(requestedEvent.userId()).isEqualTo(userId);
-
-        // Second event should be SimulationFailedEvent
-        assertThat(events.get(1)).isInstanceOf(SimulationFailedEvent.class);
-        SimulationFailedEvent failedEvent = (SimulationFailedEvent) events.get(1);
+        // Event should be SimulationFailedEvent
+        assertThat(events.get(0)).isInstanceOf(SimulationFailedEvent.class);
+        SimulationFailedEvent failedEvent = (SimulationFailedEvent) events.get(0);
         assertThat(failedEvent.portfolioId()).isEqualTo(savedPortfolio.getId());
         assertThat(failedEvent.userId()).isEqualTo(userId);
+        assertThat(failedEvent.simulationId()).isNull(); // No simulation record created for sync failure
         assertThat(failedEvent.errorMessage()).contains("has no positions");
         assertThat(failedEvent.occurredAt()).isNotNull();
     }

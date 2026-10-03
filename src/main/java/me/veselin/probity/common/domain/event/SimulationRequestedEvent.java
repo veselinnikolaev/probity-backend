@@ -1,6 +1,8 @@
 package me.veselin.probity.common.domain.event;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -13,5 +15,8 @@ public record SimulationRequestedEvent(
     int numberOfSimulations,
     int timeHorizonDays,
     double confidenceLevel,
+    Double assumedReturnPercent,
+    Double assumedVolatilityPercent,
+    Map<String, BigDecimal> marketDataSnapshot,
     Instant occurredAt
 ) implements DomainEvent {}

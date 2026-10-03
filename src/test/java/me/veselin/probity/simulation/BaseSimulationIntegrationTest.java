@@ -55,6 +55,7 @@ public abstract class BaseSimulationIntegrationTest extends BasePortfolioIntegra
 
     @AfterEach
     void cleanSimulations() {
+        // Delete in correct order to respect foreign keys
         simulationRepository.deleteAll();
     }
 }

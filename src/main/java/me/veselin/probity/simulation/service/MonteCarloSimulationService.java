@@ -19,6 +19,7 @@ import me.veselin.probity.risk.port.RiskPort;
 import me.veselin.probity.simulation.domain.Simulation;
 import me.veselin.probity.simulation.domain.SimulationPayload;
 import me.veselin.probity.simulation.domain.SimulationPayload.*;
+import me.veselin.probity.simulation.domain.SimulationStatus;
 import me.veselin.probity.simulation.dto.SimulationData;
 import me.veselin.probity.portfolio.service.portfolio.PortfolioValuationService;
 import me.veselin.probity.simulation.exception.EmptyPortfolioException;
@@ -114,44 +115,97 @@ public class MonteCarloSimulationService {
     @Transactional
     /**
      * Executes a new simulation run for a user-owned portfolio and persists its payload.
+     * Synchronous entry point - single insert with COMPLETED status.
      */
     public SimulationData run(UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId) {
         log.info("Running Monte Carlo simulation portfolioId={} userId={} paths={} horizon={}d",
                 portfolioId, userId, numberOfSimulations, timeHorizonDays);
-
-        // Publish requested event at start (before portfolio loading)
-        domainEventPublisher.publish(new SimulationRequestedEvent(
-                null, // simulationId not yet known
-                portfolioId,
-                userId,
-                numberOfSimulations,
-                timeHorizonDays,
-                confidenceLevel,
-                Instant.now()
-        ));
 
         try {
             SimulationContext context = loadAndValidatePortfolio(portfolioId, userId);
             SimulationParameters params = prepareSimulationParameters(context.positions(), assumedReturnPercent, assumedVolatilityPercent);
             SimulationPayload payload = executeSimulationRun(context, params, numberOfSimulations, timeHorizonDays, confidenceLevel);
 
-            Simulation saved = persistResults(portfolioId, userId, context.currentValue(), payload, numberOfSimulations, timeHorizonDays, confidenceLevel, assumedReturnPercent, assumedVolatilityPercent);
+            Simulation completed = simulationRepository.save(
+                    Simulation.builder()
+                            .portfolioId(portfolioId)
+                            .userId(userId)
+                            .numberOfSimulations(numberOfSimulations)
+                            .timeHorizonDays(timeHorizonDays)
+                            .confidenceLevel(confidenceLevel)
+                            .assumedReturnPct(assumedReturnPercent)
+                            .assumedVolatilityPct(assumedVolatilityPercent)
+                            .currentPortfolioValue(context.currentValue())
+                            .resultPayload(payload)
+                            .status(SimulationStatus.COMPLETED)
+                            .build()
+            );
 
-            log.info("Simulation saved id={}", saved.getId());
+            log.info("Simulation completed id={}", completed.getId());
 
             // Publish completed event after successful persist
             domainEventPublisher.publish(new SimulationCompletedEvent(
-                    saved.getId(),
+                    completed.getId(),
                     portfolioId,
                     userId,
                     context.currentValue(),
                     Instant.now()
             ));
 
-            return simulationMapper.toDto(saved);
+            return simulationMapper.toDto(completed);
         } catch (Exception e) {
             // Publish failed event on exception
             domainEventPublisher.publish(new SimulationFailedEvent(
+                    null, // No simulation ID for sync failure (not persisted)
+                    portfolioId,
+                    userId,
+                    e.getMessage(),
+                    Instant.now()
+            ));
+            // Rethrow original exception
+            throw e;
+        }
+    }
+
+    /**
+     * Executes an asynchronous simulation run for a pre-created PENDING simulation.
+     * Called by Kafka consumer. Updates status through PROCESSING → COMPLETED/FAILED.
+     */
+    @Transactional
+    public SimulationData runAsync(UUID simulationId, UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, java.util.Map<String, java.math.BigDecimal> marketDataSnapshot) {
+        log.info("Running async Monte Carlo simulation id={} portfolioId={} userId={} paths={} horizon={}d",
+                simulationId, portfolioId, userId, numberOfSimulations, timeHorizonDays);
+
+        // Update status to PROCESSING
+        simulationRepository.updateStatus(simulationId, SimulationStatus.PROCESSING);
+
+        try {
+            SimulationContext context = loadAndValidatePortfolio(portfolioId, userId);
+            SimulationParameters params = prepareSimulationParameters(context.positions(), assumedReturnPercent, assumedVolatilityPercent);
+            SimulationPayload payload = executeSimulationRun(context, params, numberOfSimulations, timeHorizonDays, confidenceLevel);
+
+            // Complete the existing PENDING record
+            Simulation completed = simulationRepository.complete(simulationId, context.currentValue(), payload);
+
+            log.info("Async simulation completed id={}", completed.getId());
+
+            // Publish completed event after successful persist
+            domainEventPublisher.publish(new SimulationCompletedEvent(
+                    completed.getId(),
+                    portfolioId,
+                    userId,
+                    context.currentValue(),
+                    Instant.now()
+            ));
+
+            return simulationMapper.toDto(completed);
+        } catch (Exception e) {
+            // Update status to FAILED
+            simulationRepository.updateStatus(simulationId, SimulationStatus.FAILED);
+
+            // Publish failed event on exception
+            domainEventPublisher.publish(new SimulationFailedEvent(
+                    simulationId,
                     portfolioId,
                     userId,
                     e.getMessage(),
@@ -255,26 +309,6 @@ public class MonteCarloSimulationService {
             allPaths.add(convertToDomainPath(i, paths[i]));
         }
         return allPaths;
-    }
-
-    /**
-     * Persists the simulation results to the database.
-     */
-    private Simulation persistResults(UUID portfolioId, UUID userId, BigDecimal currentValue,
-                                     SimulationPayload payload, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent) {
-        return simulationRepository.save(
-                Simulation.builder()
-                        .portfolioId(portfolioId)
-                        .userId(userId)
-                        .numberOfSimulations(numberOfSimulations)
-                        .timeHorizonDays(timeHorizonDays)
-                        .confidenceLevel(confidenceLevel)
-                        .assumedReturnPct(assumedReturnPercent)
-                        .assumedVolatilityPct(assumedVolatilityPercent)
-                        .currentPortfolioValue(currentValue)
-                        .resultPayload(payload)
-                        .build()
-        );
     }
 
     /**

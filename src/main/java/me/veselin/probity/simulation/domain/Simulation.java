@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import me.veselin.probity.common.audit.BaseEntitySoftDelete;
 
 import java.math.BigDecimal;
@@ -24,6 +25,7 @@ import java.util.UUID;
  * Pure domain class - no JPA annotations (split in Phase 1).
  */
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -60,6 +62,10 @@ public class Simulation extends BaseEntitySoftDelete {
      * Mirrors the frontend SimulationResult type exactly for zero-transform serialisation.
      */
     private SimulationPayload resultPayload;
+
+    // ── Status ──────────────────────────────────────────────────────────────
+
+    private SimulationStatus status;
 
     // ── Identity ──────────────────────────────────────────────────────────────
 

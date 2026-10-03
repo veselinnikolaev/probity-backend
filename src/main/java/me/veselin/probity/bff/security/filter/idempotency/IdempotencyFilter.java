@@ -153,8 +153,9 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             IdempotencyRecord existingRecord = (IdempotencyRecord) redisTemplate.opsForValue().get(storageKey);
 
             if (existingRecord != null) {
-                if (existingRecord.status() == IdempotencyStatus.PENDING) {
-                    // Request is currently being processed - reject duplicate
+                if (existingRecord.status() == IdempotencyStatus.PENDING
+                        || existingRecord.status() == IdempotencyStatus.PROCESSING) {
+                    // Request is currently being processed (sync or async) - reject duplicate
                     response.sendError(HttpStatus.CONFLICT.value(), "An identical request is currently processing.");
                     return;
                 } else if (existingRecord.status() == IdempotencyStatus.COMPLETED) {

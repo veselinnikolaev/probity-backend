@@ -6,6 +6,7 @@ import me.veselin.probity.simulation.dto.SimulationData;
 import org.springframework.stereotype.Component;
 
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @Component
 public class SimulationMapper {
@@ -19,6 +20,30 @@ public class SimulationMapper {
         String createdAt = simulation.getCreatedAt() != null
                 ? ISO_FORMATTER.format(simulation.getCreatedAt())
                 : null;
+
+        // Handle null payload (PENDING/PROCESSING simulations)
+        if (p == null) {
+            return new SimulationData(
+                    simulation.getId().toString(),
+                    simulation.getPortfolioId().toString(),
+                    createdAt,
+                    new SimulationData.Parameters(
+                            simulation.getNumberOfSimulations(),
+                            simulation.getTimeHorizonDays(),
+                            simulation.getConfidenceLevel()
+                    ),
+                    simulation.getCurrentPortfolioValue(),
+                    List.of(),  // empty allPaths
+                    List.of(),  // empty percentileSeries
+                    new SimulationData.Statistics(
+                            0.0, 0.0, 0.0, 0.0, 0.0
+                    ),
+                    new SimulationData.Outcomes(
+                            0.0, 0.0, 0.0, 0.0
+                    ),
+                    List.of()  // empty distribution
+            );
+        }
 
         return new SimulationData(
                 simulation.getId().toString(),
