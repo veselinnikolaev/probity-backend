@@ -4,7 +4,9 @@ import me.veselin.probity.portfolio.domain.Portfolio;
 import me.veselin.probity.simulation.dto.SimulationData;
 import me.veselin.probity.simulation.dto.SimulationStatusResponse;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public interface SimulationPort {
@@ -16,6 +18,12 @@ public interface SimulationPort {
      * Returns 202 Accepted with status location.
      */
     SimulationStatusResponse runSimulationAsync(UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, String idempotencyKey);
+
+    /**
+     * Executes an asynchronous simulation run for a pre-existing PENDING record.
+     * Called by Kafka consumer. Takes the pre-created simulationId and marketDataSnapshot.
+     */
+    SimulationData executeAsync(UUID simulationId, UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, Map<String, BigDecimal> marketDataSnapshot);
 
     SimulationData getSimulation(UUID simulationId, UUID userId);
 

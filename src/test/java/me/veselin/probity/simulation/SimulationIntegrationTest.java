@@ -1,12 +1,18 @@
 package me.veselin.probity.simulation;
 
 import jakarta.servlet.http.Cookie;
+import me.veselin.probity.auth.domain.User;
 import me.veselin.probity.auth.dto.AuthResult;
 import me.veselin.probity.auth.enumeration.Token;
+import me.veselin.probity.auth.repository.UserRepository;
 import me.veselin.probity.common.util.ApiRoutes;
+import me.veselin.probity.simulation.domain.SimulationStatus;
+import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.*;
@@ -14,6 +20,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
+
+    @Autowired
+    UserRepository userRepository;
 
     // ── POST /simulations/run ─────────────────────────────────────────────────
 
@@ -363,6 +372,51 @@ class SimulationIntegrationTest extends BaseSimulationIntegrationTest {
         mockMvc.perform(get(ApiRoutes.Simulations.SIMULATIONS)
                         .param("portfolioId", portfolioId))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void list_excludesPendingAndFailed_onlyCompleted() throws Exception {
+        AuthResult auth = login();
+        UUID userId = userRepository.findByUsername(ADMIN_USERNAME)
+                .map(User::getId)
+                .orElseThrow();
+
+        // Create a sync simulation (COMPLETED)
+        String completedId = runSimulationAndGetId(auth, 100, 5);
+
+        // Manually insert a PENDING simulation (simulating async creation)
+        var pendingSimulation = me.veselin.probity.simulation.domain.Simulation.builder()
+                .portfolioId(UUID.fromString(portfolioId))
+                .userId(userId)
+                .numberOfSimulations(50)
+                .timeHorizonDays(10)
+                .confidenceLevel(0.95)
+                .currentPortfolioValue(BigDecimal.ZERO)
+                .resultPayload(null)
+                .status(me.veselin.probity.simulation.domain.SimulationStatus.PENDING)
+                .build();
+        simulationRepository.save(pendingSimulation);
+
+        // Manually insert a FAILED simulation
+        var failedSimulation = me.veselin.probity.simulation.domain.Simulation.builder()
+                .portfolioId(UUID.fromString(portfolioId))
+                .userId(userId)
+                .numberOfSimulations(50)
+                .timeHorizonDays(10)
+                .confidenceLevel(0.95)
+                .currentPortfolioValue(BigDecimal.ZERO)
+                .resultPayload(null)
+                .status(me.veselin.probity.simulation.domain.SimulationStatus.FAILED)
+                .build();
+        simulationRepository.save(failedSimulation);
+
+        // List should only return the COMPLETED simulation
+        mockMvc.perform(get(ApiRoutes.Simulations.SIMULATIONS)
+                        .param("portfolioId", portfolioId)
+                        .cookie(new Cookie(Token.ACCESS.getCookieName(), auth.accessToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].id").value(completedId));
     }
 
     // ── Persistence: round-trip ───────────────────────────────────────────────

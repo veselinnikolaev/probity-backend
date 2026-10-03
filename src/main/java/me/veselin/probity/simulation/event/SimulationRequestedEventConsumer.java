@@ -14,6 +14,8 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -84,8 +86,9 @@ public class SimulationRequestedEventConsumer {
         }
 
         try {
-            // Execute the simulation
-            simulationPort.runSimulationAsync(
+            // Execute the simulation using the pre-created simulationId and marketDataSnapshot
+            simulationPort.executeAsync(
+                    event.simulationId(),
                     event.portfolioId(),
                     event.numberOfSimulations(),
                     event.timeHorizonDays(),
@@ -93,7 +96,7 @@ public class SimulationRequestedEventConsumer {
                     event.assumedReturnPercent(),
                     event.assumedVolatilityPercent(),
                     event.userId(),
-                    idempotencyKey
+                    event.marketDataSnapshot()
             );
 
             // On success: mark COMPLETED in Redis

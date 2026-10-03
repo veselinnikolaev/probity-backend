@@ -12,8 +12,10 @@ import me.veselin.probity.simulation.port.SimulationPort;
 import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -74,6 +76,15 @@ public class SimulationApplicationService implements SimulationPort {
         // The Kafka event will be published by the controller after this returns
         // We return the status response immediately with PENDING status
         return buildStatusResponse(saved, SimulationStatus.PENDING, null);
+    }
+
+    /**
+     * Executes an asynchronous simulation run for a pre-existing PENDING record.
+     * Called by Kafka consumer. Takes the pre-created simulationId and marketDataSnapshot.
+     */
+    public SimulationData executeAsync(UUID simulationId, UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, Map<String, BigDecimal> marketDataSnapshot) {
+        log.info("Application service: executing async simulation id={} portfolioId={}", simulationId, portfolioId);
+        return monteCarloSimulationService.runAsync(simulationId, portfolioId, numberOfSimulations, timeHorizonDays, confidenceLevel, assumedReturnPercent, assumedVolatilityPercent, userId, marketDataSnapshot);
     }
 
     /**

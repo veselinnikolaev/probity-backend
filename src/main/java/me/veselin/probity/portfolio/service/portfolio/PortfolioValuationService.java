@@ -49,4 +49,21 @@ public class PortfolioValuationService {
         double totalValue = priceFetcher.computeTotalValue(positions, priceByTicker);
         return BigDecimal.valueOf(totalValue);
     }
+
+    /**
+     * Computes the current value of a portfolio given pre-fetched prices as BigDecimal.
+     * Used for async simulations with market data snapshot.
+     *
+     * @param positions the portfolio positions
+     * @param priceByTicker map of ticker to price
+     * @return total portfolio value
+     */
+    public BigDecimal computeValueWithBigDecimalPrices(
+            List<PortfolioPosition> positions, 
+            Map<String, BigDecimal> priceByTicker) {
+        return positions.stream()
+                .map(pos -> priceByTicker.getOrDefault(pos.getAsset().getTicker(), BigDecimal.ZERO)
+                        .multiply(pos.getQuantity()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
 }

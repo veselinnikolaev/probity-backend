@@ -170,8 +170,9 @@ public class MonteCarloSimulationService {
     /**
      * Executes an asynchronous simulation run for a pre-created PENDING simulation.
      * Called by Kafka consumer. Updates status through PROCESSING → COMPLETED/FAILED.
+     * No @Transactional: FAILED status must commit even when exception is rethrown.
+     * Uses marketDataSnapshot (captured at request time) for stale-price safety.
      */
-    @Transactional
     public SimulationData runAsync(UUID simulationId, UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, java.util.Map<String, java.math.BigDecimal> marketDataSnapshot) {
         log.info("Running async Monte Carlo simulation id={} portfolioId={} userId={} paths={} horizon={}d",
                 simulationId, portfolioId, userId, numberOfSimulations, timeHorizonDays);
@@ -180,12 +181,36 @@ public class MonteCarloSimulationService {
         simulationRepository.updateStatus(simulationId, SimulationStatus.PROCESSING);
 
         try {
-            SimulationContext context = loadAndValidatePortfolio(portfolioId, userId);
-            SimulationParameters params = prepareSimulationParameters(context.positions(), assumedReturnPercent, assumedVolatilityPercent);
-            SimulationPayload payload = executeSimulationRun(context, params, numberOfSimulations, timeHorizonDays, confidenceLevel);
+            // Load portfolio positions (no price fetching - using snapshot)
+            Portfolio portfolio = portfolioQueryPort.loadPortfolioWithPositions(portfolioId, userId);
+            List<PortfolioPosition> positions = portfolio.getPositions();
+
+            if (positions.isEmpty()) {
+                throw new EmptyPortfolioException(
+                        "Portfolio %s has no positions — cannot run simulation".formatted(portfolioId));
+            }
+
+            // Use marketDataSnapshot for stale-price safety (prices at request time)
+            BigDecimal currentValue;
+            if (marketDataSnapshot != null && !marketDataSnapshot.isEmpty()) {
+                currentValue = portfolioValuationService.computeValueWithBigDecimalPrices(positions, marketDataSnapshot);
+                log.debug("Using marketDataSnapshot for current value: {}", currentValue);
+            } else {
+                // Fallback to live prices if snapshot is missing
+                currentValue = computeCurrentValue(positions);
+                log.warn("marketDataSnapshot empty, falling back to live prices: {}", currentValue);
+            }
+
+            if (currentValue.compareTo(BigDecimal.ZERO) == 0) {
+                throw new IllegalStateException(
+                        "Portfolio value is zero — price fetch failed for all positions. Check ERROR logs above.");
+            }
+
+            SimulationParameters params = prepareSimulationParameters(positions, assumedReturnPercent, assumedVolatilityPercent);
+            SimulationPayload payload = executeSimulationRun(new SimulationContext(positions, currentValue), params, numberOfSimulations, timeHorizonDays, confidenceLevel);
 
             // Complete the existing PENDING record
-            Simulation completed = simulationRepository.complete(simulationId, context.currentValue(), payload);
+            Simulation completed = simulationRepository.complete(simulationId, currentValue, payload);
 
             log.info("Async simulation completed id={}", completed.getId());
 
@@ -194,7 +219,7 @@ public class MonteCarloSimulationService {
                     completed.getId(),
                     portfolioId,
                     userId,
-                    context.currentValue(),
+                    currentValue,
                     Instant.now()
             ));
 
