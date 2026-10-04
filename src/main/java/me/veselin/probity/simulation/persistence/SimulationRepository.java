@@ -8,6 +8,7 @@ import me.veselin.probity.simulation.exception.SimulationNotFoundException;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -49,6 +50,21 @@ public class SimulationRepository {
         entity.setStatus(SimulationStatus.COMPLETED.name());
         SimulationJpaEntity saved = jpaRepository.save(entity);
         return SimulationMapper.toDomain(saved);
+    }
+
+    /**
+     * Atomically claims a PENDING (or stale PROCESSING) simulation for processing.
+     * Updates status to PROCESSING and updated_at to now.
+     *
+     * @param id the simulation ID
+     * @param lease maximum age of a PROCESSING row to consider stale (e.g., 5 minutes)
+     * @return true if row was claimed (status was PENDING or stale PROCESSING), false otherwise
+     */
+    public boolean claimForProcessing(UUID id, java.time.Duration lease) {
+        Instant now = Instant.now();
+        Instant staleThreshold = now.minus(lease);
+        int updated = jpaRepository.claimForProcessing(id, SimulationStatus.PROCESSING.name(), staleThreshold, now);
+        return updated > 0;
     }
 
     public Optional<Simulation> findById(UUID id) {

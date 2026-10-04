@@ -2,11 +2,9 @@ package me.veselin.probity.simulation.event;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import me.veselin.probity.bff.security.filter.idempotency.IdempotencyProperties;
-import me.veselin.probity.bff.security.filter.idempotency.IdempotencyRecord;
-import me.veselin.probity.bff.security.filter.idempotency.IdempotencyStatus;
 import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
 import me.veselin.probity.simulation.port.SimulationPort;
+import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -14,13 +12,13 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
-import java.util.Map;
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Kafka consumer for simulation requested events.
- * Handles idempotency, retries, and dead-letter queue forwarding.
+ * Uses DB-based claim (conditional UPDATE) for idempotency instead of Redis.
+ * Handles retries and dead-letter queue forwarding.
  */
 @Component
 @RequiredArgsConstructor
@@ -28,18 +26,17 @@ import java.util.concurrent.TimeUnit;
 public class SimulationRequestedEventConsumer {
 
     private final SimulationPort simulationPort;
-    private final IdempotencyProperties idempotencyProperties;
-    private final RedisIdempotencyService redisIdempotencyService;
+    private final SimulationRepository simulationRepository;
 
     /**
      * Consumes simulation requested events from Kafka.
      * <p>
-     * Idempotency is enforced via Redis: the consumer attempts to atomically transition
-     * the idempotency key from PENDING to PROCESSING. If the key is already PROCESSING or COMPLETED,
-     * the message is acknowledged and skipped (duplicate/redelivery).
+     * Idempotency is enforced via DB conditional UPDATE:
+     * - Attempts to atomically claim a PENDING (or stale PROCESSING) row.
+     * - If claim fails (already COMPLETED/FAILED or fresh PROCESSING), ack and skip.
      * <p>
-     * On success: status → COMPLETED, idempotency key → COMPLETED.
-     * On failure: status → FAILED, idempotency key deleted (allows retry via DLT).
+     * On success: status → COMPLETED via simulationRepository.complete().
+     * On failure: status → FAILED via simulationRepository.updateStatus(), rethrow for retry/DLT.
      * After max retries: message forwarded to DLT topic.
      */
     @KafkaListener(
@@ -49,7 +46,7 @@ public class SimulationRequestedEventConsumer {
     )
     public void consume(
             @Payload SimulationRequestedEvent event,
-            @Header(KafkaHeaders.RECEIVED_KEY) String idempotencyKey,
+            @Header(KafkaHeaders.RECEIVED_KEY) String kafkaKey,
             @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset,
             Acknowledgment ack) {
@@ -57,30 +54,13 @@ public class SimulationRequestedEventConsumer {
         log.info("Received simulation request event: simulationId={}, portfolioId={}, partition={}, offset={}",
                 event.simulationId(), event.portfolioId(), partition, offset);
 
-        // Build Redis storage key using configured prefix
-        String storageKey = idempotencyProperties.getKeyPrefix() + event.userId() + ":" + idempotencyKey;
+        // Try to claim the simulation for processing (PENDING or stale PROCESSING → PROCESSING)
+        // 5-minute lease: if a worker died >5min ago, we reclaim the row
+        boolean claimed = simulationRepository.claimForProcessing(event.simulationId(), Duration.ofMinutes(5));
 
-        // Check current status in Redis
-        IdempotencyRecord existingRecord = redisIdempotencyService.getRecord(storageKey);
-
-        if (existingRecord != null) {
-            if (existingRecord.status() == IdempotencyStatus.PROCESSING) {
-                log.warn("Simulation already being processed (PROCESSING), skipping duplicate: simulationId={}", event.simulationId());
-                ack.acknowledge();
-                return;
-            } else if (existingRecord.status() == IdempotencyStatus.COMPLETED) {
-                log.info("Simulation already completed, skipping duplicate: simulationId={}", event.simulationId());
-                ack.acknowledge();
-                return;
-            }
-            // If PENDING, we proceed to process
-        }
-
-        // Atomically set PROCESSING status
-        boolean lockAcquired = redisIdempotencyService.setProcessingIfPending(storageKey);
-
-        if (!lockAcquired) {
-            log.warn("Failed to acquire PROCESSING lock for simulationId={}, another worker may have picked it up", event.simulationId());
+        if (!claimed) {
+            // Row not claimable: either COMPLETED, FAILED, or fresh PROCESSING (another worker)
+            log.info("Simulation {} not claimable (already COMPLETED/FAILED or being processed), skipping", event.simulationId());
             ack.acknowledge();
             return;
         }
@@ -99,19 +79,14 @@ public class SimulationRequestedEventConsumer {
                     event.marketDataSnapshot()
             );
 
-            // On success: mark COMPLETED in Redis
-            redisIdempotencyService.setCompleted(storageKey, 200, "{}");
             log.info("Simulation completed successfully: simulationId={}", event.simulationId());
-
             ack.acknowledge();
 
         } catch (Exception e) {
             log.error("Simulation failed: simulationId={}, error={}", event.simulationId(), e.getMessage(), e);
 
-            // On failure: delete Redis key to allow retry via DLT/redelivery
-            redisIdempotencyService.deleteKey(storageKey);
-
-            // Re-throw to trigger Kafka retry/DLT mechanism
+            // Rethrow to trigger Kafka retry/DLT mechanism
+            // The runAsync method already marks FAILED in DB
             throw e;
         }
     }

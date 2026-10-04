@@ -14,6 +14,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Async implementation of DomainEventPublisher using Kafka.
  * Publishes simulation requested events to Kafka topic for async processing.
+ * Other events are ignored (handled by synchronous publisher).
  */
 @Component
 @RequiredArgsConstructor
@@ -39,7 +40,7 @@ public class SimulationEventPublisher implements DomainEventPublisher {
             });
         } else {
             // For other events (PortfolioUpdatedEvent, SimulationCompletedEvent, SimulationFailedEvent),
-            // delegate to synchronous publisher or log warning
+            // delegate to synchronous publisher (handled by CompositeDomainEventPublisher)
             log.debug("Event type not configured for async publishing, skipping Kafka: {}", event.getClass().getSimpleName());
         }
     }

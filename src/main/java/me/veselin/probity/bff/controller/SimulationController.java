@@ -13,6 +13,7 @@ import me.veselin.probity.bff.dto.simulation.RunSimulationRequest;
 import me.veselin.probity.bff.dto.simulation.SimulationResponse;
 import me.veselin.probity.bff.security.filter.jwt.UserPrincipal;
 import me.veselin.probity.bff.util.ConditionalGetSupport;
+import me.veselin.probity.common.domain.event.DomainEventPublisher;
 import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.marketdata.port.MarketDataPort;
@@ -28,6 +29,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -41,6 +43,7 @@ public class SimulationController {
 
     private final SimulationPort simulationPort;
     private final MarketDataPort marketDataPort;
+    private final DomainEventPublisher domainEventPublisher;
 
     /**
      * POST /simulations/run
@@ -260,10 +263,22 @@ public class SimulationController {
      */
     private void publishSimulationRequestedEvent(UUID simulationId, RunSimulationRequest request, UUID userId,
                                                  Map<String, BigDecimal> marketDataSnapshot, String idempotencyKey) {
-        // The event publishing is handled by the application service
-        // We just need to ensure the event includes the market data snapshot
-        // The SimulationApplicationService.runSimulationAsync creates the PENDING record
-        // Then the controller publishes the event with the snapshot
+        // Publish event with the simulationId (used as Kafka key) and market data snapshot
+        // The simulationId is the same one used for the PENDING record
+        SimulationRequestedEvent event = new SimulationRequestedEvent(
+                simulationId,
+                request.portfolioId(),
+                userId,
+                request.numberOfSimulations(),
+                request.timeHorizonDays(),
+                request.confidenceLevel(),
+                request.assumedReturnPercent(),
+                request.assumedVolatilityPercent(),
+                marketDataSnapshot,
+                Instant.now()
+        );
+        domainEventPublisher.publish(event);
+        log.debug("Published SimulationRequestedEvent to Kafka: simulationId={}", simulationId);
     }
 
     private SimulationResponse mapToResponse(SimulationData data) {

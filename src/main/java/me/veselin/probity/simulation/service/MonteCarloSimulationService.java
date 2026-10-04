@@ -170,15 +170,35 @@ public class MonteCarloSimulationService {
     /**
      * Executes an asynchronous simulation run for a pre-created PENDING simulation.
      * Called by Kafka consumer. Updates status through PROCESSING → COMPLETED/FAILED.
-     * No @Transactional: FAILED status must commit even when exception is rethrown.
+     * No @Transactional: each repository call commits independently; FAILED status commits even when exception is rethrown.
      * Uses marketDataSnapshot (captured at request time) for stale-price safety.
+     * First claims the row via conditional UPDATE (PENDING or stale PROCESSING → PROCESSING).
      */
     public SimulationData runAsync(UUID simulationId, UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, java.util.Map<String, java.math.BigDecimal> marketDataSnapshot) {
         log.info("Running async Monte Carlo simulation id={} portfolioId={} userId={} paths={} horizon={}d",
                 simulationId, portfolioId, userId, numberOfSimulations, timeHorizonDays);
 
-        // Update status to PROCESSING
-        simulationRepository.updateStatus(simulationId, SimulationStatus.PROCESSING);
+        // Atomically claim the row: PENDING → PROCESSING, or stale PROCESSING → PROCESSING
+        // Lease of 5 minutes: if a worker died mid-processing >5min ago, we reclaim it
+        boolean claimed = simulationRepository.claimForProcessing(simulationId, java.time.Duration.ofMinutes(5));
+        if (!claimed) {
+            log.warn("Simulation {} not in claimable state (not PENDING or stale PROCESSING), skipping", simulationId);
+            // Return a dummy DTO - the consumer will ack and skip
+            var dummy = me.veselin.probity.simulation.domain.Simulation.builder()
+                    .portfolioId(portfolioId)
+                    .userId(userId)
+                    .numberOfSimulations(numberOfSimulations)
+                    .timeHorizonDays(timeHorizonDays)
+                    .confidenceLevel(confidenceLevel)
+                    .assumedReturnPct(assumedReturnPercent)
+                    .assumedVolatilityPct(assumedVolatilityPercent)
+                    .currentPortfolioValue(java.math.BigDecimal.ZERO)
+                    .resultPayload(null)
+                    .status(SimulationStatus.PROCESSING)
+                    .build();
+            dummy.setId(simulationId);
+            return simulationMapper.toDto(dummy);
+        }
 
         try {
             // Load portfolio positions (no price fetching - using snapshot)
@@ -209,7 +229,7 @@ public class MonteCarloSimulationService {
             SimulationParameters params = prepareSimulationParameters(positions, assumedReturnPercent, assumedVolatilityPercent);
             SimulationPayload payload = executeSimulationRun(new SimulationContext(positions, currentValue), params, numberOfSimulations, timeHorizonDays, confidenceLevel);
 
-            // Complete the existing PENDING record
+            // Complete the existing PENDING record (PROCESSING → COMPLETED)
             Simulation completed = simulationRepository.complete(simulationId, currentValue, payload);
 
             log.info("Async simulation completed id={}", completed.getId());
@@ -225,18 +245,20 @@ public class MonteCarloSimulationService {
 
             return simulationMapper.toDto(completed);
         } catch (Exception e) {
-            // Update status to FAILED
-            simulationRepository.updateStatus(simulationId, SimulationStatus.FAILED);
-
-            // Publish failed event on exception
-            domainEventPublisher.publish(new SimulationFailedEvent(
-                    simulationId,
-                    portfolioId,
-                    userId,
-                    e.getMessage(),
-                    Instant.now()
-            ));
-            // Rethrow original exception
+            // Mark FAILED (independent commit - no transaction to roll back)
+            try {
+                simulationRepository.updateStatus(simulationId, SimulationStatus.FAILED);
+                domainEventPublisher.publish(new SimulationFailedEvent(
+                        simulationId,
+                        portfolioId,
+                        userId,
+                        e.getMessage(),
+                        Instant.now()
+                ));
+            } catch (Exception ex) {
+                log.error("Failed to mark simulation as FAILED: {}", simulationId, ex);
+            }
+            // Rethrow original exception for Kafka retry/DLT
             throw e;
         }
     }
