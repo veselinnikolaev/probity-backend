@@ -11,13 +11,14 @@
 Probity is a high-performance fintech portfolio risk management platform that delivers sub-second Monte Carlo simulation results for 10,000+ path runs while maintaining clean architectural boundaries. The system leverages Java 21 virtual threads, hexagonal architecture, and mathematical rigor to provide real-time portfolio risk assessment with concurrent processing capabilities.
 
 **Key Achievements:**
-- 324/324 passing tests (100% test coverage)
+- 337/337 passing tests (100% test coverage)
 - Sub-second simulation execution for 10,000+ GBM paths
 - Clean hexagonal architecture with explicit domain boundaries
 - Production-ready security with timing-attack mitigation
 - Optimized memory usage through primitive array structures
 - AI-powered portfolio analyst with Spring AI integration
 - Comprehensive user settings and session management
+- **Async simulation execution via Kafka with claim-for-processing**
 
 ---
 
@@ -63,6 +64,8 @@ The system transitioned from a coupled, monolithic structure to a domain-driven,
 │  - Simulation aggregate with GBM result persistence         │
 │  - JSONB payload optimization for large result sets         │
 │  - Parallel path generation with dedicated executor         │
+│  - Async execution via Kafka consumer (claim-for-processing)│
+│  - Market data snapshot for stale-price safety              │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -219,7 +222,49 @@ The assistant uses function calling to access real portfolio data:
 - Configurable via `@RateLimit` annotation
 - Redis-backed distributed rate limiting
 
-### 1.6 Idempotency Implementation
+### 1.7 Async Simulation Execution
+
+Probity supports **asynchronous Monte Carlo simulations** via a Kafka-backed event-driven pipeline:
+
+**Flow:**
+```
+POST /simulations/run-async  →  202 Accepted + Location header
+         │
+         ▼
+   Create PENDING row  ──►  Publish SimulationRequestedEvent to Kafka
+         │                         (simulationId as message key)
+         ▼                         │
+   Return status URL  ──►  Kafka Consumer (claimForProcessing)
+                            │
+                            ▼
+                      Execute GBM paths
+                            │
+                            ▼
+                      complete() → COMPLETED row
+                            │
+                            ▼
+                      Poll GET /simulations/{id}/status
+```
+
+**Key Implementation Details:**
+
+- **Idempotency**: Client provides `Idempotency-Key`; filter creates Redis PENDING record; Kafka event uses `simulationId` as message key (consistent across filter/consumer)
+- **Claim-for-processing**: Atomic DB conditional UPDATE (`PENDING` or stale `PROCESSING` → `PROCESSING`) with 5-minute lease; stale rows auto-reclaimed
+- **No transaction on worker**: Each repository call commits independently; `FAILED` status commits even when exception rethrown for Kafka retry/DLT
+- **Stale-price safety**: Market data snapshot captured at request time in controller, passed via event, used for portfolio valuation in async worker
+- **Event routing**: `CompositeDomainEventPublisher` delegates to:
+  - `SynchronousDomainEventPublisher` (in-process Spring listeners) for all events
+  - `SimulationEventPublisher` (Kafka) for `SimulationRequestedEvent` only
+- **List endpoint**: Returns only `COMPLETED` rows, ordered by `createdAt DESC`
+
+**Endpoints:**
+| Endpoint | Method | Description |
+|---|---|---|
+| `/simulations/run-async` | POST | Initiate async simulation, returns 202 + Location |
+| `/simulations/{id}/status` | GET | Poll status (PENDING/PROCESSING/COMPLETED/FAILED) |
+| `/simulations?portfolioId=` | GET | List completed simulations for portfolio |
+
+### 1.8 Idempotency Implementation
 
 **Purpose:**
 - Prevent duplicate processing of POST requests (portfolio creation, position addition, simulation runs)
@@ -576,11 +621,11 @@ return sum / cutoff;
 ### 6.1 Test Coverage
 
 **Test Suite Statistics:**
-- Total tests: 324
-- Passing: 324 (100%)
+- Total tests: 337
+- Passing: 337 (100%)
 - Unit tests: 240+
-- Integration tests: 80+
-- Test execution time: ~32 seconds
+- Integration tests: 97+ (including async consumer tests)
+- Test execution time: ~35 seconds
 
 ### 6.2 Test Categories
 

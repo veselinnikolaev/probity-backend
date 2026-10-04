@@ -105,7 +105,7 @@ Near-linear scalability with CPU cores and zero GC pauses due to primitive `doub
 | Portfolio Valuation | 92% | 3ms | 80ms |
 | Risk Calculations | 78% | 1ms | 45ms |
 
-**Test suite**: 324/324 passing tests with comprehensive coverage.
+**Test suite**: 337/337 passing tests with comprehensive coverage.
 
 ## Mathematical Foundations
 
@@ -297,6 +297,52 @@ Run specific test classes:
 | `FROM_EMAIL` | Sender email for notifications | `noreply@probity.com` |
 | `SPRING_DOCKER_COMPOSE_ENABLED` | Auto-compose integration flag | `false` |
 | `CORS_ALLOWED_ORIGINS` | Allowed frontend origins | `http://localhost:5173` |
+
+## Async Simulation Execution
+
+Probity supports **asynchronous Monte Carlo simulations** via a Kafka-backed event-driven pipeline:
+
+### Flow Overview
+
+```
+POST /simulations/run-async  →  202 Accepted + Location header
+         │
+         ▼
+   Create PENDING row  ──►  Publish SimulationRequestedEvent to Kafka
+         │                         (simulationId as message key)
+         ▼                         │
+   Return status URL  ──►  Kafka Consumer (claimForProcessing)
+                            │
+                            ▼
+                      Execute GBM paths
+                            │
+                            ▼
+                      complete() → COMPLETED row
+                            │
+                            ▼
+                      Poll GET /simulations/{id}/status
+```
+
+### Key Implementation Details
+
+- **Idempotency**: Client provides `Idempotency-Key`; filter creates Redis PENDING record; Kafka event uses `simulationId` as message key (consistent across filter/consumer)
+- **Claim-for-processing**: Atomic DB conditional UPDATE (`PENDING` or stale `PROCESSING` → `PROCESSING`) with 5-minute lease; stale rows auto-reclaimed
+- **No transaction on worker**: Each repository call commits independently; `FAILED` status commits even when exception rethrown for Kafka retry/DLT
+- **Stale-price safety**: Market data snapshot captured at request time in controller, passed via event, used for portfolio valuation in async worker
+- **Event routing**: `CompositeDomainEventPublisher` delegates to:
+  - `SynchronousDomainEventPublisher` (in-process Spring listeners) for all events
+  - `SimulationEventPublisher` (Kafka) for `SimulationRequestedEvent` only
+- **List endpoint**: Returns only `COMPLETED` rows, ordered by `createdAt DESC`
+
+### Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/simulations/run-async` | POST | Initiate async simulation, returns 202 + Location |
+| `/simulations/{id}/status` | GET | Poll status (PENDING/PROCESSING/COMPLETED/FAILED) |
+| `/simulations?portfolioId=` | GET | List completed simulations for portfolio |
+
+---
 
 ## Key Design Decisions
 
