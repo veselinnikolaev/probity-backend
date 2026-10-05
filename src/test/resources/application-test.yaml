@@ -15,6 +15,13 @@ spring:
       port: 6379
       username: default
       password:
+  kafka:
+    # Default OFF for the whole test profile: the 300+ existing tests must not
+    # attach a consumer to any broker. Only the async slice
+    # (me.veselin.probity.simulation.async) flips this to true via
+    # @DynamicPropertySource, against its own Testcontainers broker.
+    listener:
+      auto-startup: false
 
 probity:
   jwt:

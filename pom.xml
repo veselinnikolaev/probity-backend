@@ -177,6 +177,21 @@
             <scope>test</scope>
         </dependency>
 
+        <!--
+          Pinned to 1.20.3 deliberately: that is the only org.testcontainers:kafka
+          artifact present in the local repository, and the build runs offline (-o).
+          org.testcontainers.kafka.KafkaContainer targets the official apache/kafka image,
+          which is apache/kafka:3.7.0 locally. testcontainers core stays on the
+          Boot-managed 1.21.4 via testcontainers-bom; the kafka module only uses stable
+          GenericContainer / DockerImageName API, so the minor-version skew is safe.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>kafka</artifactId>
+            <version>1.20.3</version>
+            <scope>test</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
