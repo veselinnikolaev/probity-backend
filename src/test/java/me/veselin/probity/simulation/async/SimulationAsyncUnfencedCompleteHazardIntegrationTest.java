@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static me.veselin.probity.simulation.async.AsyncKafkaTestSupport.registerDormantListener;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -53,7 +54,7 @@ class SimulationAsyncUnfencedCompleteHazardIntegrationTest extends BaseAsyncSimu
 
     @DynamicPropertySource
     static void kafkaProperties(DynamicPropertyRegistry registry) {
-        AsyncKafkaTestSupport.registerDormantListener(registry);
+        registerDormantListener(registry);
     }
 
     @Test

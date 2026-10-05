@@ -50,6 +50,16 @@ public final class AsyncKafkaTestSupport {
      */
     public static final String CONSUMER_GROUP = "probity-simulation-worker";
 
+    /**
+     * A broker address nothing can be listening on.
+     *
+     * <p>Port 1 is privileged: binding it needs root, so on every platform this suite
+     * supports the connection is refused immediately rather than hanging. Used by
+     * {@link #registerDormantListener} so a dormant-listener context cannot reach any
+     * cluster at all, instead of depending on the absence of a broker on 9092.
+     */
+    public static final String UNREACHABLE_BROKER = "localhost:1";
+
     public static final KafkaContainer KAFKA = startBroker();
 
     private AsyncKafkaTestSupport() {
@@ -78,17 +88,31 @@ public final class AsyncKafkaTestSupport {
     }
 
     /**
-     * Keeps the listener dormant <em>without</em> repointing the broker.
+     * Keeps the listener dormant and the broker unreachable.
      *
-     * <p>Needed by tests that publish a real {@code SimulationRequestedEvent} and then
-     * assert on the untouched row. If they used the shared broker, a listener container
-     * left running by an earlier class's cached Spring context would be in the same
-     * consumer group and would claim the row out from under the assertion. Leaving
-     * {@code spring.kafka.bootstrap-servers} at {@code localhost:9092} - the same broker
-     * the other 337 tests already depend on - puts the record on a different cluster,
-     * where no container in this slice can reach it.
+     * <p>Needed by tests that exercise the request half of the async flow and then assert
+     * on the untouched row — T1 above all, plus the repository-only T3b probe.
+     *
+     * <p>The requirement is: <em>no broker this context can reach, and no running
+     * listener</em>. Both are established absolutely rather than by accident:
+     *
+     * <ul>
+     *   <li>{@code spring.kafka.bootstrap-servers} is repointed at {@link #UNREACHABLE_BROKER}.
+     *       The previous version left it at {@code application.yaml}'s
+     *       {@code localhost:9092}, so the test silently depended on whatever the developer
+     *       happened to be running — and, worse, on the <em>absence</em> of a consumer for
+     *       it. The listener pins its {@code groupId} in the annotation, so every class in
+     *       this slice shares one group; a container left running by a cached Spring context
+     *       could claim a row mid-assertion if the two clusters were the same. A privileged
+     *       port nothing binds removes the possibility instead of relying on it.</li>
+     *   <li>Callers additionally mock {@code SimulationEventPublisher} with
+     *       {@code @MockitoBean}, so nothing is sent and the request path never touches the
+     *       network — which also removes the 60 s {@code max.block.ms} and metadata-timeout
+     *       noise a dead broker produces.</li>
+     * </ul>
      */
     public static void registerDormantListener(DynamicPropertyRegistry registry) {
+        registry.add("spring.kafka.bootstrap-servers", () -> UNREACHABLE_BROKER);
         registry.add("spring.kafka.listener.auto-startup", () -> false);
     }
 

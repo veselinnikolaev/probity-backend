@@ -6,16 +6,19 @@ import me.veselin.probity.auth.enumeration.Token;
 import me.veselin.probity.common.util.ApiRoutes;
 import me.veselin.probity.simulation.domain.Simulation;
 import me.veselin.probity.simulation.domain.SimulationStatus;
+import me.veselin.probity.simulation.event.SimulationEventPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.UUID;
 
+import static me.veselin.probity.simulation.async.AsyncKafkaTestSupport.registerDormantListener;
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -34,12 +37,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class SimulationRunAsyncRequestIntegrationTest extends BaseAsyncSimulationIntegrationTest {
 
+    /**
+     * The Kafka hop is stubbed out entirely: the publisher is mocked and the broker address
+     * is {@link AsyncKafkaTestSupport#UNREACHABLE_BROKER}, so this class needs no broker at
+     * all and no listener in any cached context can reach a row it seeds. T1 is about the
+     * request contract, and the request contract does not include the publish succeeding.
+     */
+    @MockitoBean
+    private SimulationEventPublisher simulationEventPublisher;
+
     @DynamicPropertySource
     static void kafkaProperties(DynamicPropertyRegistry registry) {
-        // Dormant listener, and deliberately *not* repointed at the shared broker: a
-        // container left running by an earlier class's cached context shares our
-        // consumer group, so it would otherwise claim this row mid-assertion.
-        AsyncKafkaTestSupport.registerDormantListener(registry);
+        registerDormantListener(registry);
     }
 
     @Test
