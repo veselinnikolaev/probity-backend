@@ -56,7 +56,9 @@ public class SimulationRequestedEventConsumer {
 
         // Try to claim the simulation for processing (PENDING or stale PROCESSING → PROCESSING)
         // 5-minute lease: if a worker died >5min ago, we reclaim the row
-        boolean claimed = simulationRepository.claimForProcessing(event.simulationId(), Duration.ofMinutes(5));
+        boolean claimed = simulationRepository
+                .claimForProcessing(event.simulationId(), Duration.ofMinutes(5))
+                .isPresent();
 
         if (!claimed) {
             // Row not claimable: either COMPLETED, FAILED, or fresh PROCESSING (another worker)

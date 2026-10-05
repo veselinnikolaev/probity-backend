@@ -23,6 +23,7 @@ import me.veselin.probity.simulation.domain.SimulationStatus;
 import me.veselin.probity.simulation.dto.SimulationData;
 import me.veselin.probity.portfolio.service.portfolio.PortfolioValuationService;
 import me.veselin.probity.simulation.exception.EmptyPortfolioException;
+import me.veselin.probity.simulation.exception.SimulationClaimLostException;
 import me.veselin.probity.simulation.exception.SimulationNotFoundException;
 import me.veselin.probity.simulation.mapper.SimulationMapper;
 import me.veselin.probity.simulation.persistence.SimulationRepository;
@@ -179,9 +180,11 @@ public class MonteCarloSimulationService {
                 simulationId, portfolioId, userId, numberOfSimulations, timeHorizonDays);
 
         // Atomically claim the row: PENDING → PROCESSING, or stale PROCESSING → PROCESSING
-        // Lease of 5 minutes: if a worker died mid-processing >5min ago, we reclaim it
-        boolean claimed = simulationRepository.claimForProcessing(simulationId, java.time.Duration.ofMinutes(5));
-        if (!claimed) {
+        // Lease of 5 minutes: if a worker died mid-processing >5min ago, we reclaim it.
+        // The returned token is the fence this worker's write-back must present.
+        Instant fenceToken = simulationRepository.claimForProcessing(simulationId, java.time.Duration.ofMinutes(5))
+                .orElse(null);
+        if (fenceToken == null) {
             log.warn("Simulation {} not in claimable state (not PENDING or stale PROCESSING), skipping", simulationId);
             // Return a dummy DTO - the consumer will ack and skip
             var dummy = me.veselin.probity.simulation.domain.Simulation.builder()
@@ -229,8 +232,12 @@ public class MonteCarloSimulationService {
             SimulationParameters params = prepareSimulationParameters(positions, assumedReturnPercent, assumedVolatilityPercent);
             SimulationPayload payload = executeSimulationRun(new SimulationContext(positions, currentValue), params, numberOfSimulations, timeHorizonDays, confidenceLevel);
 
-            // Complete the existing PENDING record (PROCESSING → COMPLETED)
-            Simulation completed = simulationRepository.complete(simulationId, currentValue, payload);
+            // Complete the existing PENDING record (PROCESSING → COMPLETED), fenced on the
+            // token our claim returned. Empty means a peer reclaimed the row mid-run: stop
+            // without side effects rather than overwriting its work with a stale result.
+            Simulation completed = simulationRepository
+                    .complete(simulationId, currentValue, payload, fenceToken)
+                    .orElseThrow(() -> new SimulationClaimLostException(simulationId, fenceToken, "complete"));
 
             log.info("Async simulation completed id={}", completed.getId());
 
@@ -244,6 +251,11 @@ public class MonteCarloSimulationService {
             ));
 
             return simulationMapper.toDto(completed);
+        } catch (SimulationClaimLostException lost) {
+            // A peer reclaimed this row mid-run. It is not ours to fail, release or retry —
+            // the general handler below would mark it FAILED and destroy the peer's work in
+            // flight. Propagate untouched; the consumer logs and acknowledges.
+            throw lost;
         } catch (Exception e) {
             // Mark FAILED (independent commit - no transaction to roll back)
             try {
