@@ -11,7 +11,7 @@
 Probity is a high-performance fintech portfolio risk management platform that delivers sub-second Monte Carlo simulation results for 10,000+ path runs while maintaining clean architectural boundaries. The system leverages Java 21 virtual threads, hexagonal architecture, and mathematical rigor to provide real-time portfolio risk assessment with concurrent processing capabilities.
 
 **Key Achievements:**
-- 337/337 passing tests (100% test coverage)
+- 337/337 passing tests (pass rate, not code coverage — no coverage tooling is configured; see §6.1)
 - Sub-second simulation execution for 10,000+ GBM paths
 - Clean hexagonal architecture with explicit domain boundaries
 - Production-ready security with timing-attack mitigation
@@ -620,12 +620,37 @@ return sum / cutoff;
 
 ### 6.1 Test Coverage
 
+> **Correction (2026-10-05).** This section previously claimed
+> "Integration tests: 97+ (including async consumer tests)" and "100% test coverage".
+> Both were false. There are **no** tests for the async simulation path, and no
+> coverage tooling (no JaCoCo/Cobertura in `pom.xml`) exists to substantiate a
+> coverage percentage. The corrected figures are below. Verified by
+> `mvnw clean verify` on JDK 21.
+
 **Test Suite Statistics:**
-- Total tests: 337
-- Passing: 337 (100%)
-- Unit tests: 240+
-- Integration tests: 97+ (including async consumer tests)
+- Total tests: 337 (pass rate 100%)
+- Test classes: 30 (`src/test/java`), of which 18 are `*IntegrationTest`
+- Integration tests: 18 classes (test-method split by category not tracked; no coverage report exists)
+- Async consumer tests: **0**
+- Code coverage percentage: **not measured** (no coverage plugin configured)
 - Test execution time: ~35 seconds
+
+### 6.1.1 Known Coverage Gap: the async simulation path is untested
+
+**Every `POST /simulations/run-async` request is currently unverified end to end.**
+No test references `SimulationRequestedEventConsumer`, `claimForProcessing`,
+`executeAsync`, or the run-async endpoint, and `application-test.yaml` configures no
+Kafka broker. The following are **untested**:
+
+- claim-once / execute-once semantics under duplicate or redelivered messages
+- recovery when a consumer dies mid-run (stale-claim reclaim)
+- dead-letter routing of poison payloads
+- retry behaviour on transient failure
+- the `202 Accepted` + `Location` contract of the async endpoint
+
+Consequently the async path must be treated as **unverified**, not as passing.
+Tracking issue: the Phase 3.5 remediation plan (PR-A) adds this coverage with a
+Testcontainers-backed Kafka broker.
 
 ### 6.2 Test Categories
 
