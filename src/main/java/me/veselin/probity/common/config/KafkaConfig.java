@@ -15,8 +15,17 @@ import org.springframework.kafka.config.TopicBuilder;
 @Slf4j
 public class KafkaConfig {
 
-    @Value("${spring.kafka.consumer.group-id:probity-simulation-worker}")
-    private String consumerGroupId;
+    @Value("${probity.kafka.simulation-requested-topic:simulation-requested}")
+    private String simulationRequestedTopic;
+
+    @Value("${probity.kafka.simulation-requested-dlt-topic:simulation-requested.DLT}")
+    private String simulationRequestedDltTopic;
+
+    @Value("${probity.kafka.simulation-topic-partitions:1}")
+    private int simulationTopicPartitions;
+
+    @Value("${probity.kafka.simulation-dlt-retention-ms:604800000}")
+    private long simulationDltRetentionMs;
 
     /**
      * Main topic for simulation requested events.
@@ -24,8 +33,8 @@ public class KafkaConfig {
      */
     @Bean
     public NewTopic simulationRequestedTopic() {
-        return TopicBuilder.name("simulation-requested")
-                .partitions(1)
+        return TopicBuilder.name(simulationRequestedTopic)
+                .partitions(simulationTopicPartitions)
                 .replicas(1)
                 .build();
     }
@@ -36,11 +45,11 @@ public class KafkaConfig {
      */
     @Bean
     public NewTopic simulationRequestedDltTopic() {
-        return TopicBuilder.name("simulation-requested.DLT")
-                .partitions(1)
+        return TopicBuilder.name(simulationRequestedDltTopic)
+                .partitions(simulationTopicPartitions)
                 .replicas(1)
-                .config("cleanup.policy", "compact")
-                .config("retention.ms", "604800000") // 7 days
+                .config("cleanup.policy", "delete")
+                .config("retention.ms", String.valueOf(simulationDltRetentionMs))
                 .build();
     }
 }
