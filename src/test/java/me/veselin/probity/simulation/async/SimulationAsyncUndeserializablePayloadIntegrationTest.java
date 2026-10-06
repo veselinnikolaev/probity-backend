@@ -55,7 +55,7 @@ class SimulationAsyncUndeserializablePayloadIntegrationTest extends BaseAsyncSim
 
     @DynamicPropertySource
     static void kafkaProperties(DynamicPropertyRegistry registry) {
-        AsyncKafkaTestSupport.registerAsyncBroker(registry, true);
+        AsyncKafkaTestSupport.registerAsyncBroker(registry, true, "t4a-undeserializable");
     }
 
     @Test

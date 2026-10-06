@@ -38,26 +38,34 @@ import static org.awaitility.Awaitility.await;
  *
  * <p>Two things this base deliberately does <em>not</em> do:
  * <ul>
- *   <li>It does not decide whether the listener starts. That is a per-class choice
- *       (see {@link AsyncKafkaTestSupport#registerAsyncBroker}), so a test that must
- *       observe the untouched {@code PENDING} row can run with the consumer dormant.</li>
- *   <li>It does not touch production code. The claim lease is still hardcoded to five
- *       minutes in the consumer, so tests that need a short lease bind
- *       {@code probity.simulation.claim-lease} and PR-A wires it up; until then the
- *       property is inert and only the pre-fix behaviour is observable.</li>
+ *   <li>It does not decide whether the listener starts, or which consumer group it joins.
+ *       Both are per-class choices (see {@link AsyncKafkaTestSupport#registerAsyncBroker}),
+ *       so a test that must observe the untouched {@code PENDING} row can run with the
+ *       consumer dormant, and each live class gets a group it is the sole member of.</li>
+ *   <li>It does not touch production code. Tests needing a short lease bind
+ *       {@code probity.simulation.claim-lease}; the tests that would otherwise wait out the
+ *       five-minute production lease bind a two-second one.</li>
  * </ul>
  */
 public abstract class BaseAsyncSimulationIntegrationTest extends BaseSimulationIntegrationTest {
 
     /**
+     * The portfolio read both simulation paths use, and therefore the one call whose
+     * invocation count means "an execution actually started". Named as a constant because it
+     * appears in three places that must not drift apart: this counter, the failing stub in
+     * the retry-budget test, and the diagnostics.
+     */
+    protected static final String EXECUTED_ON = "loadPortfolioWithPositionsAndAssets";
+
+    /**
      * Spied so a test can count real executions.
      *
-     * <p>{@code MonteCarloSimulationService.runAsync} only reaches
-     * {@code loadPortfolioWithPositions} <em>after</em> its claim succeeds. Counting
-     * this call therefore counts genuine executions, which is what the async
-     * invariants are about — counting {@code runAsync} invocations would not work,
-     * because today the consumer's own double-claim makes the method run without
-     * executing anything.
+     * <p>{@code MonteCarloSimulationService.runAsync} reaches
+     * {@code loadPortfolioWithPositionsAndAssets} only after it has been handed a claim it
+     * actually holds, so counting this call counts genuine executions — which is what the
+     * async invariants are about. Counting {@code runAsync} invocations would not work: a
+     * listener that decides not to run must still be counted as "did not execute", and
+     * {@code runAsync} is only reached by the executions we want to count.
      */
     @MockitoSpyBean
     protected PortfolioQueryPort portfolioQueryPort;
@@ -68,9 +76,19 @@ public abstract class BaseAsyncSimulationIntegrationTest extends BaseSimulationI
     @Autowired
     private KafkaListenerEndpointRegistry listenerEndpointRegistry;
 
-    /** Pinned by the listener annotation; the only group this slice can use. */
+    @Autowired
+    private org.springframework.core.env.Environment environment;
+
+    /**
+     * The group this class's own consumer listens as.
+     *
+     * <p>Read back from the environment rather than held in a field, because the
+     * {@code @DynamicPropertySource} value is what the container actually resolved. A field
+     * could drift from the property and quietly make the offset probe report the wrong group.
+     */
     protected String currentGroupId() {
-        return AsyncKafkaTestSupport.CONSUMER_GROUP;
+        return environment.getProperty("probity.simulation.consumer-group",
+                AsyncKafkaTestSupport.DEFAULT_CONSUMER_GROUP);
     }
 
     @BeforeEach
@@ -135,7 +153,7 @@ public abstract class BaseAsyncSimulationIntegrationTest extends BaseSimulationI
     /** Number of times real execution started — i.e. the portfolio was actually loaded. */
     protected long executionAttempts() {
         return Mockito.mockingDetails(portfolioQueryPort).getInvocations().stream()
-                .filter(i -> i.getMethod().getName().equals("loadPortfolioWithPositions"))
+                .filter(i -> i.getMethod().getName().equals(EXECUTED_ON))
                 .count();
     }
 
@@ -180,12 +198,6 @@ public abstract class BaseAsyncSimulationIntegrationTest extends BaseSimulationI
                             + ". Observed: " + diagnostics(simulationId, lastSeen.get()), e);
         }
         return lastSeen.get();
-    }
-
-    /** Waits for the row to leave PENDING, proving the consumer received and acted on the record. */
-    protected Simulation awaitStatusChangeFromPending(UUID simulationId, Duration timeout) {
-        return awaitStatus(simulationId, Set.of(
-                SimulationStatus.PROCESSING, SimulationStatus.COMPLETED, SimulationStatus.FAILED), timeout);
     }
 
     /**

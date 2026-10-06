@@ -169,117 +169,86 @@ public class MonteCarloSimulationService {
     }
 
     /**
-     * Executes an asynchronous simulation run for a pre-created PENDING simulation.
-     * Called by Kafka consumer. Updates status through PROCESSING → COMPLETED/FAILED.
-     * No @Transactional: each repository call commits independently; FAILED status commits even when exception is rethrown.
-     * Uses marketDataSnapshot (captured at request time) for stale-price safety.
-     * First claims the row via conditional UPDATE (PENDING or stale PROCESSING → PROCESSING).
+     * Executes an asynchronous simulation run for a row the caller has already claimed.
+     *
+     * <p>Pure execution — it claims nothing, releases nothing, and decides nothing. The
+     * caller is the Kafka consumer: it holds the offset and the group identity, so it is the
+     * only component that can answer "is this delivery mine to run", and it passes the fence
+     * token this write-back must present. The previous version claimed here as well, and the
+     * second claim matched nothing because the consumer had just taken the row — so the run
+     * was swallowed by a dummy DTO with a null payload while the consumer logged success.
+     *
+     * <p>No {@code @Transactional}: the fenced complete is one atomic statement and the
+     * failure path belongs to the consumer, which releases the row before rethrowing.
+     *
+     * <p>Uses {@code marketDataSnapshot} (captured at request time) for stale-price safety.
+     *
+     * @param fenceToken the token from the claim this delivery's row was taken with; a write
+     *                   that does not match it affects zero rows and raises
+     *                   {@link SimulationClaimLostException}
      */
-    public SimulationData runAsync(UUID simulationId, UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, java.util.Map<String, java.math.BigDecimal> marketDataSnapshot) {
-        log.info("Running async Monte Carlo simulation id={} portfolioId={} userId={} paths={} horizon={}d",
-                simulationId, portfolioId, userId, numberOfSimulations, timeHorizonDays);
+    public SimulationData runAsync(UUID simulationId, UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, java.util.Map<String, java.math.BigDecimal> marketDataSnapshot, Instant fenceToken) {
+        log.info("Running async Monte Carlo simulation id={} portfolioId={} userId={} paths={} horizon={}d fence={}",
+                simulationId, portfolioId, userId, numberOfSimulations, timeHorizonDays, fenceToken);
 
-        // Atomically claim the row: PENDING → PROCESSING, or stale PROCESSING → PROCESSING
-        // Lease of 5 minutes: if a worker died mid-processing >5min ago, we reclaim it.
-        // The returned token is the fence this worker's write-back must present.
-        Instant fenceToken = simulationRepository.claimForProcessing(simulationId, java.time.Duration.ofMinutes(5))
-                .orElse(null);
-        if (fenceToken == null) {
-            log.warn("Simulation {} not in claimable state (not PENDING or stale PROCESSING), skipping", simulationId);
-            // Return a dummy DTO - the consumer will ack and skip
-            var dummy = me.veselin.probity.simulation.domain.Simulation.builder()
-                    .portfolioId(portfolioId)
-                    .userId(userId)
-                    .numberOfSimulations(numberOfSimulations)
-                    .timeHorizonDays(timeHorizonDays)
-                    .confidenceLevel(confidenceLevel)
-                    .assumedReturnPct(assumedReturnPercent)
-                    .assumedVolatilityPct(assumedVolatilityPercent)
-                    .currentPortfolioValue(java.math.BigDecimal.ZERO)
-                    .resultPayload(null)
-                    .status(SimulationStatus.PROCESSING)
-                    .build();
-            dummy.setId(simulationId);
-            return simulationMapper.toDto(dummy);
+        // Load portfolio positions (no price fetching - using snapshot).
+        // The assets must arrive initialized: this method runs outside any transaction, so
+        // lazy proxies would throw on first use. It cannot — as run() does — rely on an
+        // ambient session, because the fenced write-back that follows has to commit on its
+        // own and the failure path has to be able to release the row afterwards.
+        Portfolio portfolio = portfolioQueryPort.loadPortfolioWithPositionsAndAssets(portfolioId, userId);
+        List<PortfolioPosition> positions = portfolio.getPositions();
+
+        if (positions.isEmpty()) {
+            throw new EmptyPortfolioException(
+                    "Portfolio %s has no positions — cannot run simulation".formatted(portfolioId));
         }
 
-        try {
-            // Load portfolio positions (no price fetching - using snapshot)
-            Portfolio portfolio = portfolioQueryPort.loadPortfolioWithPositions(portfolioId, userId);
-            List<PortfolioPosition> positions = portfolio.getPositions();
-
-            if (positions.isEmpty()) {
-                throw new EmptyPortfolioException(
-                        "Portfolio %s has no positions — cannot run simulation".formatted(portfolioId));
-            }
-
-            // Use marketDataSnapshot for stale-price safety (prices at request time)
-            BigDecimal currentValue;
-            if (marketDataSnapshot != null && !marketDataSnapshot.isEmpty()) {
-                currentValue = portfolioValuationService.computeValueWithBigDecimalPrices(positions, marketDataSnapshot);
-                log.debug("Using marketDataSnapshot for current value: {}", currentValue);
-            } else {
-                // Fallback to live prices if snapshot is missing
-                currentValue = computeCurrentValue(positions);
-                log.warn("marketDataSnapshot empty, falling back to live prices: {}", currentValue);
-            }
-
-            if (currentValue.compareTo(BigDecimal.ZERO) == 0) {
-                throw new IllegalStateException(
-                        "Portfolio value is zero — price fetch failed for all positions. Check ERROR logs above.");
-            }
-
-            SimulationParameters params = prepareSimulationParameters(positions, assumedReturnPercent, assumedVolatilityPercent);
-            SimulationPayload payload = executeSimulationRun(new SimulationContext(positions, currentValue), params, numberOfSimulations, timeHorizonDays, confidenceLevel);
-
-            // Complete the existing PENDING record (PROCESSING → COMPLETED), fenced on the
-            // token our claim returned. Empty means a peer reclaimed the row mid-run: stop
-            // without side effects rather than overwriting its work with a stale result.
-            Simulation completed = simulationRepository
-                    .complete(simulationId, currentValue, payload, fenceToken)
-                    .orElseThrow(() -> new SimulationClaimLostException(simulationId, fenceToken, "complete"));
-
-            log.info("Async simulation completed id={}", completed.getId());
-
-            // Publish completed event after successful persist
-            domainEventPublisher.publish(new SimulationCompletedEvent(
-                    completed.getId(),
-                    portfolioId,
-                    userId,
-                    currentValue,
-                    Instant.now()
-            ));
-
-            return simulationMapper.toDto(completed);
-        } catch (SimulationClaimLostException lost) {
-            // A peer reclaimed this row mid-run. It is not ours to fail, release or retry —
-            // the general handler below would mark it FAILED and destroy the peer's work in
-            // flight. Propagate untouched; the consumer logs and acknowledges.
-            throw lost;
-        } catch (Exception e) {
-            // Mark FAILED (independent commit - no transaction to roll back)
-            try {
-                simulationRepository.updateStatus(simulationId, SimulationStatus.FAILED);
-                domainEventPublisher.publish(new SimulationFailedEvent(
-                        simulationId,
-                        portfolioId,
-                        userId,
-                        e.getMessage(),
-                        Instant.now()
-                ));
-            } catch (Exception ex) {
-                log.error("Failed to mark simulation as FAILED: {}", simulationId, ex);
-            }
-            // Rethrow original exception for Kafka retry/DLT
-            throw e;
+        // Use marketDataSnapshot for stale-price safety (prices at request time)
+        BigDecimal currentValue;
+        if (marketDataSnapshot != null && !marketDataSnapshot.isEmpty()) {
+            currentValue = portfolioValuationService.computeValueWithBigDecimalPrices(positions, marketDataSnapshot);
+            log.debug("Using marketDataSnapshot for current value: {}", currentValue);
+        } else {
+            // Fallback to live prices if snapshot is missing
+            currentValue = computeCurrentValue(positions);
+            log.warn("marketDataSnapshot empty, falling back to live prices: {}", currentValue);
         }
+
+        if (currentValue.compareTo(BigDecimal.ZERO) == 0) {
+            throw new IllegalStateException(
+                    "Portfolio value is zero — price fetch failed for all positions. Check ERROR logs above.");
+        }
+
+        SimulationParameters params = prepareSimulationParameters(positions, assumedReturnPercent, assumedVolatilityPercent);
+        SimulationPayload payload = executeSimulationRun(new SimulationContext(positions, currentValue), params, numberOfSimulations, timeHorizonDays, confidenceLevel);
+
+        // Complete the existing PENDING record (PROCESSING → COMPLETED), fenced on the
+        // token our claim returned. Empty means a peer reclaimed the row mid-run: stop
+        // without side effects rather than overwriting its work with a stale result.
+        Simulation completed = simulationRepository
+                .complete(simulationId, currentValue, payload, fenceToken)
+                .orElseThrow(() -> new SimulationClaimLostException(simulationId, fenceToken, "complete"));
+
+        log.info("Async simulation completed id={}", completed.getId());
+
+        // Publish completed event after successful persist
+        domainEventPublisher.publish(new SimulationCompletedEvent(
+                completed.getId(),
+                portfolioId,
+                userId,
+                currentValue,
+                Instant.now()
+        ));
+
+        return simulationMapper.toDto(completed);
     }
 
     /**
      * Loads and validates the portfolio for simulation.
      */
     private SimulationContext loadAndValidatePortfolio(UUID portfolioId, UUID userId) {
-        Portfolio portfolio = portfolioQueryPort.loadPortfolioWithPositions(portfolioId, userId);
+        Portfolio portfolio = portfolioQueryPort.loadPortfolioWithPositionsAndAssets(portfolioId, userId);
         List<PortfolioPosition> positions = portfolio.getPositions();
 
         if (positions.isEmpty()) {

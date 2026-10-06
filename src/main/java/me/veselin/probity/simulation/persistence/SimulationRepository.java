@@ -131,6 +131,19 @@ public class SimulationRepository {
                 .map(SimulationMapper::toDomain);
     }
 
+    /**
+     * The status of a live (not soft-deleted) row, or empty if it is gone.
+     *
+     * <p>Used by the consumer to choose between nacking and acknowledging when a claim
+     * fails. Loading the whole aggregate to read one column would be wasteful, and the
+     * {@code deleted} predicate is what keeps a soft-deleted row from reading as a runnable
+     * {@code PENDING} one.
+     */
+    public Optional<SimulationStatus> findLiveStatus(UUID id) {
+        return jpaRepository.findLiveStatusById(id)
+                .map(SimulationStatus::valueOf);
+    }
+
     public Optional<Simulation> findByIdAndUserId(UUID id, UUID userId) {
         return jpaRepository.findByIdAndUserId(id, userId)
                 .map(SimulationMapper::toDomain);

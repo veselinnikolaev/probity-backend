@@ -79,12 +79,14 @@ public class SimulationApplicationService implements SimulationPort {
     }
 
     /**
-     * Executes an asynchronous simulation run for a pre-existing PENDING record.
-     * Called by Kafka consumer. Takes the pre-created simulationId and marketDataSnapshot.
+     * Executes an asynchronous simulation run for a row the caller has already claimed.
+     * <p>
+     * Pure pass-through: the claim is owned by the Kafka consumer, which also supplies the
+     * fence token the write-back must present.
      */
-    public SimulationData executeAsync(UUID simulationId, UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, Map<String, BigDecimal> marketDataSnapshot) {
-        log.info("Application service: executing async simulation id={} portfolioId={}", simulationId, portfolioId);
-        return monteCarloSimulationService.runAsync(simulationId, portfolioId, numberOfSimulations, timeHorizonDays, confidenceLevel, assumedReturnPercent, assumedVolatilityPercent, userId, marketDataSnapshot);
+    public SimulationData executeAsync(UUID simulationId, UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, Map<String, BigDecimal> marketDataSnapshot, Instant fenceToken) {
+        log.info("Application service: executing async simulation id={} portfolioId={} fence={}", simulationId, portfolioId, fenceToken);
+        return monteCarloSimulationService.runAsync(simulationId, portfolioId, numberOfSimulations, timeHorizonDays, confidenceLevel, assumedReturnPercent, assumedVolatilityPercent, userId, marketDataSnapshot, fenceToken);
     }
 
     /**

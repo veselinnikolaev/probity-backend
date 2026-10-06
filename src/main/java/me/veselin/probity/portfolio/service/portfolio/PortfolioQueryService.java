@@ -40,11 +40,23 @@ public class PortfolioQueryService implements PortfolioQueryPort {
      */
     @Override
     public Portfolio loadPortfolioWithPositions(UUID id, UUID principalId) {
-        Portfolio portfolio = portfolioRepository.findByIdWithPositions(id)
-                .orElseThrow(() -> {
-                    log.error("Portfolio not found id={}", id);
-                    return new PortfolioNotFoundException("Portfolio not found: " + id);
-                });
+        return requireOwner(portfolioRepository.findByIdWithPositions(id).orElse(null), id, principalId);
+    }
+
+    @Override
+    public Portfolio loadPortfolioWithPositionsAndAssets(UUID id, UUID principalId) {
+        return requireOwner(portfolioRepository.findByIdWithPositionsAndAssets(id).orElse(null), id, principalId);
+    }
+
+    /**
+     * The shared half of every portfolio read: the row must exist, and it must be the
+     * caller's. The not-found log stays here so both loaders report it identically.
+     */
+    private Portfolio requireOwner(Portfolio portfolio, UUID id, UUID principalId) {
+        if (portfolio == null) {
+            log.error("Portfolio not found id={}", id);
+            throw new PortfolioNotFoundException("Portfolio not found: " + id);
+        }
         if (!portfolio.getUserId().equals(principalId)) {
             throw new AccessDeniedException("Access denied to portfolio: " + id);
         }

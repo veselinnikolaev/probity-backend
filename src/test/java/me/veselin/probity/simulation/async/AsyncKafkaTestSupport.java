@@ -29,12 +29,21 @@ import java.util.UUID;
  * the local Docker image cache, so the offline build never pulls.
  *
  * <p><strong>Note on consumer groups.</strong> {@code SimulationRequestedEventConsumer}
- * pins {@code groupId = "probity-simulation-worker"} in its {@code @KafkaListener}
- * annotation, so {@code spring.kafka.consumer.group-id} cannot be overridden per test
- * class - the annotation wins. Every class in this slice therefore shares one group on
- * one broker. That is harmless: tests delete their rows in {@code @AfterEach}, so a
- * record replayed by a later class finds no row, the claim matches nothing, and the
- * consumer acks and skips.
+ * resolves its {@code groupId} from {@code probity.simulation.consumer-group}, and
+ * {@link #registerAsyncBroker} points that at a group derived from the suffix each test
+ * class passes. This is not cosmetic. The topic has a single partition, and every Spring
+ * context in this slice stays cached — and therefore keeps its listener container running —
+ * until the JVM exits. With one shared group, the first container to start takes the only
+ * partition and every later class's record is executed by a <em>different</em> class's
+ * consumer: its assertions then observe someone else's executions, and {@code describeConsumer}
+ * reports whichever container happens to come first in the registry. Per-class groups make
+ * each container the only member of its own group, so it is guaranteed the partition and the
+ * only thing that will execute that class's records.
+ *
+ * <p>A class's group starts with no committed offsets and {@code auto-offset-reset=earliest},
+ * so it replays every record ever published in this JVM, including other classes'. Those rows
+ * are deleted in {@code @AfterEach}, so the claim matches nothing and the consumer
+ * acknowledges and skips — which is why sharing one topic across groups is safe here.
  */
 public final class AsyncKafkaTestSupport {
 
@@ -45,10 +54,20 @@ public final class AsyncKafkaTestSupport {
     public static final String DLT_TOPIC = "simulation-requested.DLT";
 
     /**
-     * The one group this slice can use. Pinned by the listener annotation, so it is
-     * also the group queried for committed offsets when diagnosing the ack behaviour.
+     * Prefix for the per-class consumer groups.
+     *
+     * <p>Each live-listener test class gets {@code probity-simulation-worker-<suffix>}. The
+     * suffix must be unique across the slice — see the note on consumer groups on this class.
      */
-    public static final String CONSUMER_GROUP = "probity-simulation-worker";
+    public static final String CONSUMER_GROUP_PREFIX = "probity-simulation-worker-";
+
+    /** The production default, used when nothing overrides the property. */
+    public static final String DEFAULT_CONSUMER_GROUP = "probity-simulation-worker";
+
+    /** The group a given test class's consumer listens as. */
+    public static String consumerGroup(String suffix) {
+        return CONSUMER_GROUP_PREFIX + suffix;
+    }
 
     /**
      * A broker address nothing can be listening on.
@@ -73,14 +92,18 @@ public final class AsyncKafkaTestSupport {
     }
 
     /**
-     * Points a test class at the shared broker.
+     * Points a test class at the shared broker, in a consumer group of its own.
      *
      * @param autoStartup whether the {@code simulation-requested} listener should actually
      *                    start. {@code false} keeps the consumer dormant.
+     * @param groupSuffix unique across this slice; see {@link #consumerGroup(String)}
      */
-    public static void registerAsyncBroker(DynamicPropertyRegistry registry, boolean autoStartup) {
+    public static void registerAsyncBroker(DynamicPropertyRegistry registry,
+                                          boolean autoStartup,
+                                          String groupSuffix) {
         registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         registry.add("spring.kafka.listener.auto-startup", () -> autoStartup);
+        registry.add("probity.simulation.consumer-group", () -> consumerGroup(groupSuffix));
         // The broker is brand new every JVM, so the group has no committed offsets and
         // 'earliest' means "everything this JVM published" - which removes the
         // assignment-vs-position-resolution race that 'latest' would leave open.

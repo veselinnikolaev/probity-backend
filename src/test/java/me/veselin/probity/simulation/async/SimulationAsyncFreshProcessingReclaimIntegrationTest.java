@@ -38,7 +38,7 @@ class SimulationAsyncFreshProcessingReclaimIntegrationTest extends BaseAsyncSimu
 
     @DynamicPropertySource
     static void kafkaProperties(DynamicPropertyRegistry registry) {
-        AsyncKafkaTestSupport.registerAsyncBroker(registry, true);
+        AsyncKafkaTestSupport.registerAsyncBroker(registry, true, "t3a-fresh-processing");
         registry.add("probity.simulation.claim-lease", () -> SHORT_LEASE);
     }
 
@@ -52,7 +52,7 @@ class SimulationAsyncFreshProcessingReclaimIntegrationTest extends BaseAsyncSimu
         assertEquals(SimulationStatus.PROCESSING, statusOf(id).orElseThrow(),
                 "fixture precondition: the row must start out claimed and fresh");
 
-        Optional<Long> offsetBefore = committedOffset(AsyncKafkaTestSupport.CONSUMER_GROUP);
+        Optional<Long> offsetBefore = committedOffset(currentGroupId());
 
         publish(validEventFor(id), id);
 
@@ -82,7 +82,7 @@ class SimulationAsyncFreshProcessingReclaimIntegrationTest extends BaseAsyncSimu
      * commit" would invert the finding, so an absent baseline counts as "advanced".
      */
     private String describeAck(Optional<Long> offsetBefore) {
-        Optional<Long> offsetAfter = committedOffset(AsyncKafkaTestSupport.CONSUMER_GROUP);
+        Optional<Long> offsetAfter = committedOffset(currentGroupId());
         boolean advanced = offsetAfter.isPresent()
                 && (offsetBefore.isEmpty() || offsetAfter.get() > offsetBefore.get());
 

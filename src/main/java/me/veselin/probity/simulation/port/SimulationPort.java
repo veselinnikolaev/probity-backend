@@ -5,6 +5,7 @@ import me.veselin.probity.simulation.dto.SimulationData;
 import me.veselin.probity.simulation.dto.SimulationStatusResponse;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -20,10 +21,16 @@ public interface SimulationPort {
     SimulationStatusResponse runSimulationAsync(UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, String idempotencyKey);
 
     /**
-     * Executes an asynchronous simulation run for a pre-existing PENDING record.
-     * Called by Kafka consumer. Takes the pre-created simulationId and marketDataSnapshot.
+     * Executes an asynchronous simulation run for a row the caller has already claimed.
+     *
+     * <p>Pure execution: it does not claim, release or decide anything. The caller (the
+     * Kafka consumer) owns the claim and passes the fence token that its write-back must
+     * present, so there is exactly one component responsible for "is this delivery mine to
+     * run" — the one that also holds the offset and the group identity.
+     *
+     * @param fenceToken the token returned by the claim this delivery's row was taken with
      */
-    SimulationData executeAsync(UUID simulationId, UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, Map<String, BigDecimal> marketDataSnapshot);
+    SimulationData executeAsync(UUID simulationId, UUID portfolioId, int numberOfSimulations, int timeHorizonDays, double confidenceLevel, Double assumedReturnPercent, Double assumedVolatilityPercent, UUID userId, Map<String, BigDecimal> marketDataSnapshot, Instant fenceToken);
 
     SimulationData getSimulation(UUID simulationId, UUID userId);
 

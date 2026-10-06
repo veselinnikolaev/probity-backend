@@ -34,7 +34,7 @@ class SimulationAsyncDuplicateDeliveryIntegrationTest extends BaseAsyncSimulatio
 
     @DynamicPropertySource
     static void kafkaProperties(DynamicPropertyRegistry registry) {
-        AsyncKafkaTestSupport.registerAsyncBroker(registry, true);
+        AsyncKafkaTestSupport.registerAsyncBroker(registry, true, "t2-duplicate-delivery");
     }
 
     @Test

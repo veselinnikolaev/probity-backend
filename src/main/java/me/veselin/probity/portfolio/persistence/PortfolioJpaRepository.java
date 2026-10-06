@@ -17,6 +17,23 @@ public interface PortfolioJpaRepository extends JpaRepository<PortfolioJpaEntity
     @Query("SELECT p FROM PortfolioJpaEntity p LEFT JOIN FETCH p.positions WHERE p.id = :id AND p.deleted = false")
     Optional<PortfolioJpaEntity> findByIdWithPositions(@Param("id") UUID id);
 
+    /**
+     * As {@link #findByIdWithPositions}, but also fetches each position's asset.
+     *
+     * <p>{@link #findByIdWithPositions} leaves the assets lazy, which is what makes it
+     * unusable outside a session: the caller gets proxies that throw
+     * {@code LazyInitializationException} on the first {@code getTicker()}. That is fine for
+     * a request-scoped caller under {@code @Transactional} and useless for a detached one.
+     *
+     * <p>Kept separate rather than widened in place because {@link #findByIdWithPositions}
+     * also serves the write paths ({@code saveWithPositionsAndFlush}, the position-diff in
+     * {@code PortfolioCommandService}), which never read asset state and should not pay for
+     * the join.
+     */
+    @Query("SELECT p FROM PortfolioJpaEntity p LEFT JOIN FETCH p.positions pos LEFT JOIN FETCH pos.asset "
+            + "WHERE p.id = :id AND p.deleted = false")
+    Optional<PortfolioJpaEntity> findByIdWithPositionsAndAssets(@Param("id") UUID id);
+
     @Query("SELECT p FROM PortfolioJpaEntity p LEFT JOIN FETCH p.positions WHERE p.userId = :userId AND p.deleted = false")
     List<PortfolioJpaEntity> findByUserIdWithPositions(@Param("userId") UUID userId);
 

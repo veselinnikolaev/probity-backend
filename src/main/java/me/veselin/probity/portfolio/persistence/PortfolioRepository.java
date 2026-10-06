@@ -71,6 +71,18 @@ public class PortfolioRepository {
                 .map(PortfolioMapper::toDomain);
     }
 
+    /**
+     * Portfolio with positions <em>and</em> their assets, safe to use after the session
+     * that loaded it has closed.
+     *
+     * <p>See {@link PortfolioJpaRepository#findByIdWithPositionsAndAssets} for why this is
+     * not just {@link #findByIdWithPositions}.
+     */
+    public Optional<Portfolio> findByIdWithPositionsAndAssets(UUID id) {
+        return jpaRepository.findByIdWithPositionsAndAssets(id)
+                .map(PortfolioMapper::toDomain);
+    }
+
     public List<Portfolio> findByUserIdWithPositions(UUID userId) {
         return jpaRepository.findByUserIdWithPositions(userId).stream()
                 .map(PortfolioMapper::toDomain)

@@ -23,6 +23,17 @@ public interface SimulationJpaRepository extends JpaRepository<SimulationJpaEnti
     @Query("SELECT s FROM SimulationJpaEntity s WHERE s.id = :id AND s.userId = :userId AND s.deleted = false")
     Optional<SimulationJpaEntity> findByIdAndUserId(@Param("id") UUID id, @Param("userId") UUID userId);
 
+    /**
+     * The live status of a row, as a bare {@code String} rather than an entity.
+     *
+     * <p>The consumer needs exactly one column to decide between "nack and redeliver" and
+     * "acknowledge and skip", so this is one indexed primary-key lookup instead of loading
+     * the whole aggregate. Soft-deleted rows and unknown ids are both absent, which is
+     * correct: the consumer acknowledges and skips either way.
+     */
+    @Query("SELECT s.status FROM SimulationJpaEntity s WHERE s.id = :id AND s.deleted = false")
+    Optional<String> findLiveStatusById(@Param("id") UUID id);
+
     @Query("SELECT s FROM SimulationJpaEntity s WHERE s.portfolioId = :portfolioId AND s.userId = :userId AND s.status = 'COMPLETED' AND s.deleted = false ORDER BY s.createdAt DESC")
     List<SimulationJpaEntity> findByPortfolioIdAndUserId(@Param("portfolioId") UUID portfolioId, @Param("userId") UUID userId);
 
