@@ -22,6 +22,7 @@ import me.veselin.probity.simulation.dto.SimulationData;
 import me.veselin.probity.simulation.dto.SimulationStatusResponse;
 import me.veselin.probity.simulation.port.SimulationPort;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -32,7 +33,9 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.time.temporal.ChronoUnit;
 import java.util.stream.Collectors;
 
 @Tag(name = "Simulations", description = "Monte Carlo portfolio simulations")
@@ -172,14 +175,12 @@ public class SimulationController {
             String ifNoneMatch) {
 
         log.debug("Fetching simulation status: {} for user: {}", id, principal.id());
-        String etag = "\"" + id + "\"";
-
+        SimulationStatusResponse statusResponse = simulationPort.getSimulationStatus(id, principal.id());
+        String etag = buildStatusEtag(id, statusResponse);
         if (etag.equals(ifNoneMatch)) {
             log.debug("Simulation status not modified: {}", id);
-            return ResponseEntity.status(304).build();
+            return ResponseEntity.status(HttpStatus.NOT_MODIFIED).build();
         }
-
-        SimulationStatusResponse statusResponse = simulationPort.getSimulationStatus(id, principal.id());
         return ResponseEntity.ok()
                 .eTag(etag)
                 .body(statusResponse);
@@ -234,6 +235,18 @@ public class SimulationController {
                 .stream()
                 .map(this::mapToResponse)
                 .toList());
+    }
+
+    private String buildStatusEtag(UUID id, SimulationStatusResponse statusResponse) {
+        if (statusResponse == null) {
+            return "\"" + id + "\"";
+        }
+        String updatedAt = statusResponse.getUpdatedAt() == null
+                ? "null"
+                : statusResponse.getUpdatedAt().truncatedTo(java.time.temporal.ChronoUnit.MICROS).toString();
+        String status = statusResponse.getStatus() == null ? "null" : statusResponse.getStatus();
+        String composite = id.toString() + "|" + status + "|" + updatedAt;
+        return "\"" + java.util.Objects.hash(composite) + "\"";
     }
 
     /**

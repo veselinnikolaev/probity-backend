@@ -2,6 +2,7 @@ package me.veselin.probity.common.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
+import me.veselin.probity.common.domain.event.DomainEvent;
 import me.veselin.probity.simulation.config.SimulationFailedRecordRecoverer;
 import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -10,6 +11,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
@@ -18,8 +20,8 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
-import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -35,18 +37,36 @@ public class KafkaConsumerConfig {
     private static final long RETRIES = 2L;
 
     @Bean
+    @Primary
+    public ProducerFactory<String, DomainEvent> domainEventProducerFactory(KafkaProperties kafkaProperties) {
+        Map<String, Object> configProps = new HashMap<>();
+        configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaProperties.getBootstrapServers());
+        configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+
+        if (kafkaProperties.getProducer() != null && kafkaProperties.getProducer().getProperties() != null) {
+            configProps.putAll(kafkaProperties.getProducer().getProperties());
+        }
+        return new DefaultKafkaProducerFactory<>(configProps);
+    }
+
+    @Bean
+    @Primary
+    public KafkaTemplate<String, DomainEvent> kafkaTemplate(ProducerFactory<String, DomainEvent> domainEventProducerFactory) {
+        return new KafkaTemplate<>(domainEventProducerFactory);
+    }
+
+    @Bean
     public ProducerFactory<Object, byte[]> deadLetterProducerFactory(KafkaProperties kafkaProperties) {
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaProperties.getBootstrapServers());
         configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
 
-        // Copy common producer properties
         if (kafkaProperties.getProducer() != null && kafkaProperties.getProducer().getProperties() != null) {
             configProps.putAll(kafkaProperties.getProducer().getProperties());
         }
 
-        // Ensure standard reliability settings for DLT publish
         configProps.putIfAbsent(ProducerConfig.ACKS_CONFIG, "all");
         configProps.putIfAbsent(ProducerConfig.RETRIES_CONFIG, 3);
         configProps.putIfAbsent(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000L);
@@ -58,7 +78,6 @@ public class KafkaConsumerConfig {
     public KafkaTemplate<Object, byte[]> deadLetterKafkaTemplate(ProducerFactory<Object, byte[]> deadLetterProducerFactory) {
         return new KafkaTemplate<>(deadLetterProducerFactory);
     }
-
     @Bean
     public CommonErrorHandler simulationKafkaErrorHandler(
             DeadLetterPublishingRecoverer deadLetterPublishingRecoverer,
@@ -74,10 +93,8 @@ public class KafkaConsumerConfig {
         ExponentialBackOffWithMaxRetries backOff = new ExponentialBackOffWithMaxRetries((int) RETRIES + 1);
         backOff.setInitialInterval(1000);
         backOff.setMultiplier(2.0);
-        backOff.setMaxElapsedTime(Duration.ofMinutes(5).toMillis());
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);
 
-        // Non-retryable exceptions per design
         errorHandler.addNotRetryableExceptions(
                 me.veselin.probity.simulation.exception.EmptyPortfolioException.class,
                 me.veselin.probity.portfolio.exception.PortfolioNotFoundException.class,
@@ -87,8 +104,6 @@ public class KafkaConsumerConfig {
                 org.springframework.security.access.AccessDeniedException.class,
                 IllegalArgumentException.class
         );
-
-        // IllegalStateException remains retryable (market data outage)
 
         return errorHandler;
     }
@@ -125,4 +140,17 @@ public class KafkaConsumerConfig {
         factory.setCommonErrorHandler(commonErrorHandler);
         return factory;
     }
+
+    @Bean
+    public org.springframework.kafka.core.KafkaTemplate<String, Object> stringObjectKafkaTemplate(org.springframework.boot.autoconfigure.kafka.KafkaProperties kafkaProperties) {
+        java.util.Map<String, Object> configProps = new java.util.HashMap<>();
+        configProps.put(org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaProperties.getBootstrapServers());
+        configProps.put(org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.StringSerializer.class);
+        configProps.put(org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, org.springframework.kafka.support.serializer.JsonSerializer.class);
+        if (kafkaProperties.getProducer() != null && kafkaProperties.getProducer().getProperties() != null) {
+            configProps.putAll(kafkaProperties.getProducer().getProperties());
+        }
+        return new org.springframework.kafka.core.KafkaTemplate<>(new org.springframework.kafka.core.DefaultKafkaProducerFactory<>(configProps));
+    }
+
 }

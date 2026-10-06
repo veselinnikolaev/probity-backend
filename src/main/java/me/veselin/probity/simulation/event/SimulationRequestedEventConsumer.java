@@ -23,13 +23,11 @@ import java.util.UUID;
 /**
  * Kafka consumer for simulation requested events.
  * <p>
- * Idempotency is enforced via DB conditional UPDATE:
- * - Attempts to atomically claim a PENDING (or stale PROCESSING) row.
- * - The returned fence token must be presented by every subsequent write for this row.
- * <p>
- * On success: status → COMPLETED via the fenced simulationRepository.complete().
- * On failure: the row is released PROCESSING → PENDING, fenced, then rethrown for retry/DLT.
- * After max retries: message forwarded to DLT topic.
+ * Idempotency is enforced via DB conditional UPDATE with fence token (truncated to
+ * microseconds) and state transitions per §3 of the design. Uses per-class consumer
+ * groups via property placeholder {@code ${probity.simulation.consumer-group:probity-simulation-worker}}.
+ * On success: status → COMPLETED via fenced complete. On failure: release PROCESSING → PENDING
+ * (fenced) before rethrowing so the next delivery can reclaim; exhausted retries flow to DLT.
  */
 @Component
 @RequiredArgsConstructor
