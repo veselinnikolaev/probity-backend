@@ -34,7 +34,7 @@ import java.util.Map;
 @EnableKafka
 public class KafkaConsumerConfig {
 
-    private static final long RETRIES = 2L;
+    private static final int MAX_RETRIES = 2; // retries after the first attempt; total attempts = MAX_RETRIES + 1
 
     @Bean
     @Primary
@@ -90,7 +90,7 @@ public class KafkaConsumerConfig {
                 objectMapper,
                 meterRegistry);
 
-        ExponentialBackOffWithMaxRetries backOff = new ExponentialBackOffWithMaxRetries((int) RETRIES + 1);
+        ExponentialBackOffWithMaxRetries backOff = new ExponentialBackOffWithMaxRetries(MAX_RETRIES);
         backOff.setInitialInterval(1000);
         backOff.setMultiplier(2.0);
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);
