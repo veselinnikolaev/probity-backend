@@ -2,6 +2,7 @@ package me.veselin.probity.simulation.async;
 
 import me.veselin.probity.auth.domain.User;
 import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
+import me.veselin.probity.marketdata.domain.PriceBar;
 import me.veselin.probity.portfolio.port.portfolio.PortfolioQueryPort;
 import me.veselin.probity.simulation.BaseSimulationIntegrationTest;
 import me.veselin.probity.simulation.domain.Simulation;
@@ -21,6 +22,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -32,6 +36,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 
 /**
  * Base for every test in the async (Kafka) simulation slice.
@@ -91,11 +99,51 @@ public abstract class BaseAsyncSimulationIntegrationTest extends BaseSimulationI
                 AsyncKafkaTestSupport.DEFAULT_CONSUMER_GROUP);
     }
 
+    /**
+     * The source topic this class's own listener consumes from.
+     *
+     * <p>Read back from the environment for the same reason {@link #currentGroupId()} does:
+     * the {@code @DynamicPropertySource} value is what the publisher / consumer actually
+     * resolved, and a field could drift from it.
+     */
+    protected String currentSourceTopic() {
+        return environment.getProperty("probity.kafka.simulation-requested-topic",
+                AsyncKafkaTestSupport.SOURCE_TOPIC);
+    }
+
     @BeforeEach
     void resetExecutionCounter() {
         // Clear invocations only — the spy must keep delegating to the real
         // PortfolioQueryService, and PortfolioQueryPort carries no stubs.
         Mockito.clearInvocations(portfolioQueryPort);
+    }
+
+    @BeforeEach
+    void seedAsyncMarketData() {
+        // The async listener can execute this class's record at any moment during the test,
+        // and must never observe empty market data: with the InsufficientMarketDataException
+        // gate in MonteCarloSimulationService, an empty series would fail the row instead of
+        // running. Re-stub the per-ticker bars here (after the portfolio base's @BeforeEach),
+        // so the run is not at the mercy of the shared base's stub or shared DB state.
+        List<PriceBar> appleBars = driftingBars("AAPL", 150.00);
+        List<PriceBar> googleBars = driftingBars("GOOGL", 132.00);
+
+        when(marketDataPort.getHistoricalBars(anyString(), any(), any())).thenReturn(appleBars);
+        when(marketDataPort.getHistoricalBars(eq("AAPL"), any(), any())).thenReturn(appleBars);
+        when(marketDataPort.getHistoricalBars(eq("GOOGL"), any(), any())).thenReturn(googleBars);
+    }
+
+    private static List<PriceBar> driftingBars(String ticker, double startPrice) {
+        List<PriceBar> bars = new ArrayList<>(30);
+        for (int i = 0; i < 30; i++) {
+            double price = startPrice + i * 0.5;
+            LocalDate barDate = LocalDate.now().minusDays(29L - i);
+            bars.add(PriceBar.from(ticker, barDate,
+                    new BigDecimal(price), new BigDecimal(price + 1.0),
+                    new BigDecimal(price - 1.0), new BigDecimal(price),
+                    new BigDecimal(price), 1_000_000L));
+        }
+        return bars;
     }
 
     // ── fixtures ────────────────────────────────────────────────────────────
@@ -144,7 +192,7 @@ public abstract class BaseAsyncSimulationIntegrationTest extends BaseSimulationI
      * exists before any assertion runs.
      */
     protected void publish(Object value, UUID simulationId) throws Exception {
-        kafkaTemplate.send(AsyncKafkaTestSupport.SOURCE_TOPIC, simulationId.toString(), value)
+        kafkaTemplate.send(currentSourceTopic(), simulationId.toString(), value)
                 .get(15, TimeUnit.SECONDS);
     }
 
@@ -210,7 +258,7 @@ public abstract class BaseAsyncSimulationIntegrationTest extends BaseSimulationI
     protected Optional<Long> committedOffset(String groupId) {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, AsyncKafkaTestSupport.KAFKA.getBootstrapServers());
-        TopicPartition tp = new TopicPartition(AsyncKafkaTestSupport.SOURCE_TOPIC, 0);
+        TopicPartition tp = new TopicPartition(currentSourceTopic(), 0);
         try (Admin admin = Admin.create(props)) {
             Map<TopicPartition, OffsetAndMetadata> offsets = admin.listConsumerGroupOffsets(groupId)
                     .partitionsToOffsetAndMetadata()

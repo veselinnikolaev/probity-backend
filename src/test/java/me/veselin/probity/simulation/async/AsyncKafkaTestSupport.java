@@ -40,18 +40,30 @@ import java.util.UUID;
  * each container the only member of its own group, so it is guaranteed the partition and the
  * only thing that will execute that class's records.
  *
- * <p>A class's group starts with no committed offsets and {@code auto-offset-reset=earliest},
- * so it replays every record ever published in this JVM, including other classes'. Those rows
- * are deleted in {@code @AfterEach}, so the claim matches nothing and the consumer
- * acknowledges and skips — which is why sharing one topic across groups is safe here.
+ * <p>Each class also registers its own source and dead-letter topics
+ * ({@link #sourceTopicFor(String)} / {@link #dltTopicFor(String)}) alongside its group. Were
+ * the topic shared, a fresh group with {@code auto-offset-reset=earliest} would replay every
+ * record this JVM ever published — including other classes' — and execute them against the
+ * wrong rows while the owning class's test is still running. Per-class topics make that
+ * impossible: a container only ever sees records its own class published.
  */
 public final class AsyncKafkaTestSupport {
 
-    /** Source topic, matches {@code SimulationRequestedEventConsumer}. */
+    /** Source topic, matches the default for {@code probity.kafka.simulation-requested-topic}. */
     public static final String SOURCE_TOPIC = "simulation-requested";
 
-    /** Dead-letter topic, matches {@code KafkaConfig.simulationRequestedDltTopic()}. */
+    /** Dead-letter topic, matches the default for {@code probity.kafka.simulation-requested-dlt-topic}. */
     public static final String DLT_TOPIC = "simulation-requested.DLT";
+
+    /** The source topic a given test class's listener consumes from. */
+    public static String sourceTopicFor(String suffix) {
+        return SOURCE_TOPIC + "-" + suffix;
+    }
+
+    /** The dead-letter topic a given test class's failed records land on. */
+    public static String dltTopicFor(String suffix) {
+        return DLT_TOPIC + "-" + suffix;
+    }
 
     /**
      * Prefix for the per-class consumer groups.
@@ -92,10 +104,22 @@ public final class AsyncKafkaTestSupport {
     }
 
     /**
-     * Points a test class at the shared broker, in a consumer group of its own.
+     * Points a test class at the shared broker, in a consumer group of its own and on
+     * source/DLT topics of its own.
      *
-     * @param autoStartup whether the {@code simulation-requested} listener should actually
-     *                    start. {@code false} keeps the consumer dormant.
+     * <p>Each class registers {@code probity.kafka.simulation-requested-topic} /
+     * {@code probity.kafka.simulation-requested-dlt-topic} as {@link #sourceTopicFor(String)}
+     * / {@link #dltTopicFor(String)}. Together with the per-class group this makes cross-class
+     * event replay impossible: no other container shares this class's topic <em>or</em> its
+     * group, so every record this class's DLT probe reads is this class's own failure.
+     *
+     * <p>The value deserializer is wrapped in an {@code ErrorHandlingDeserializer} (delegating
+     * to the same {@code JsonDeserializer} production uses), so an undeserialisable payload is
+     * handed to the error handler as a normal listener exception — and then to the recoverer,
+     * which restores the original bytes — instead of wedging the partition (T4a).
+     *
+     * @param autoStartup whether the simulation-requested listener should actually start.
+     *                    {@code false} keeps the consumer dormant.
      * @param groupSuffix unique across this slice; see {@link #consumerGroup(String)}
      */
     public static void registerAsyncBroker(DynamicPropertyRegistry registry,
@@ -104,10 +128,19 @@ public final class AsyncKafkaTestSupport {
         registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         registry.add("spring.kafka.listener.auto-startup", () -> autoStartup);
         registry.add("probity.simulation.consumer-group", () -> consumerGroup(groupSuffix));
+        registry.add("probity.kafka.simulation-requested-topic", () -> sourceTopicFor(groupSuffix));
+        registry.add("probity.kafka.simulation-requested-dlt-topic", () -> dltTopicFor(groupSuffix));
         // The broker is brand new every JVM, so the group has no committed offsets and
         // 'earliest' means "everything this JVM published" - which removes the
         // assignment-vs-position-resolution race that 'latest' would leave open.
         registry.add("spring.kafka.consumer.auto-offset-reset", () -> "earliest");
+        // ErrorHandlingDeserializer around the production JsonDeserializer: a value that fails
+        // to deserialise becomes a recoverable listener exception instead of a Fetcher-level
+        // SerializationException that DefaultErrorHandler refuses (see the T4a javadoc).
+        registry.add("spring.kafka.consumer.value-deserializer",
+                () -> "org.springframework.kafka.support.serializer.ErrorHandlingDeserializer");
+        registry.add("spring.kafka.consumer.properties.spring.deserializer.value.delegate.class",
+                () -> "org.springframework.kafka.support.serializer.JsonDeserializer");
     }
 
     /**
@@ -140,14 +173,26 @@ public final class AsyncKafkaTestSupport {
     }
 
     /**
-     * Drains the dead-letter topic with a throwaway consumer and returns the raw
+     * Drains a dead-letter topic with a throwaway consumer and returns the raw
      * records, so callers can assert on exact payload bytes.
      *
      * <p>Polls until {@code minRecords} have been seen or {@code timeout} elapses.
      * A short result when nothing was published is a legitimate outcome the caller must
      * assert on, not an error here.
+     *
+     * <p>Without a {@code suffix}, drains the production default topic; with one, drains
+     * {@link #dltTopicFor(String)} so a class reads only its own failures.
      */
     public static List<ConsumerRecord<String, byte[]>> drainDlt(Duration timeout, int minRecords) {
+        return drainDlt(timeout, minRecords, null);
+    }
+
+    /**
+     * As {@link #drainDlt(Duration, int)}, but drains that class's per-class DLT
+     * ({@link #dltTopicFor(String)}).
+     */
+    public static List<ConsumerRecord<String, byte[]>> drainDlt(Duration timeout, int minRecords, String suffix) {
+        String topic = suffix == null ? DLT_TOPIC : dltTopicFor(suffix);
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "probity-dlt-probe-" + UUID.randomUUID());
@@ -158,7 +203,7 @@ public final class AsyncKafkaTestSupport {
 
         List<ConsumerRecord<String, byte[]>> collected = new ArrayList<>();
         try (Consumer<String, byte[]> probe = new KafkaConsumer<>(props)) {
-            probe.subscribe(List.of(DLT_TOPIC));
+            probe.subscribe(List.of(topic));
             long deadline = System.nanoTime() + timeout.toNanos();
             while (System.nanoTime() < deadline && collected.size() < minRecords) {
                 ConsumerRecords<String, byte[]> polled = probe.poll(Duration.ofMillis(500));

@@ -77,7 +77,8 @@ class SimulationAsyncRetryBudgetIntegrationTest extends BaseAsyncSimulationInteg
 
         publish(validEventFor(id), id);
 
-        List<ConsumerRecord<String, byte[]>> dlt = AsyncKafkaTestSupport.drainDlt(DLT_WAIT, 1);
+        List<ConsumerRecord<String, byte[]>> dlt =
+                AsyncKafkaTestSupport.drainDlt(DLT_WAIT, 1, "t4b-retry-budget");
         Simulation row = simulationRepository.findById(id).orElseThrow();
 
         assertEquals(EXPECTED_ATTEMPTS, executionAttempts(),

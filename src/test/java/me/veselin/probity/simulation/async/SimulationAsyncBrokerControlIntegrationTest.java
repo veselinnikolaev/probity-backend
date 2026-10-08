@@ -56,8 +56,8 @@ class SimulationAsyncBrokerControlIntegrationTest extends BaseAsyncSimulationInt
 
         String consumer = describeConsumer();
         assertTrue(consumer.contains("running=true")
-                        && consumer.contains(AsyncKafkaTestSupport.SOURCE_TOPIC + "-0"),
+                        && consumer.contains(AsyncKafkaTestSupport.sourceTopicFor("broker-control") + "-0"),
                 () -> "the simulation listener should be running and holding partition 0 of "
-                        + AsyncKafkaTestSupport.SOURCE_TOPIC + ", but was: " + consumer);
+                        + AsyncKafkaTestSupport.sourceTopicFor("broker-control") + ", but was: " + consumer);
     }
 }

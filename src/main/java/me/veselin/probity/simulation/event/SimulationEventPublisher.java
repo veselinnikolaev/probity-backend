@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import me.veselin.probity.common.domain.event.DomainEvent;
 import me.veselin.probity.common.domain.event.DomainEventPublisher;
 import me.veselin.probity.common.domain.event.SimulationRequestedEvent;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
@@ -23,13 +24,16 @@ public class SimulationEventPublisher implements DomainEventPublisher {
 
     private final KafkaTemplate<String, DomainEvent> kafkaTemplate;
 
+    @Value("${probity.kafka.simulation-requested-topic:simulation-requested}")
+    private String simulationRequestedTopic;
+
     @Override
     public void publish(DomainEvent event) {
         if (event instanceof SimulationRequestedEvent simulationEvent) {
             String key = simulationEvent.simulationId().toString(); // Use simulationId as message key for partitioning
             log.debug("Publishing SimulationRequestedEvent to Kafka: simulationId={}", simulationEvent.simulationId());
 
-            CompletableFuture<SendResult<String, DomainEvent>> future = kafkaTemplate.send("simulation-requested", key, event);
+            CompletableFuture<SendResult<String, DomainEvent>> future = kafkaTemplate.send(simulationRequestedTopic, key, event);
             future.whenComplete((result, ex) -> {
                 if (ex != null) {
                     log.error("Failed to publish SimulationRequestedEvent to Kafka: simulationId={}", simulationEvent.simulationId(), ex);

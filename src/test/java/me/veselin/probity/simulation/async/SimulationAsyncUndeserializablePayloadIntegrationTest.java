@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -67,25 +67,33 @@ class SimulationAsyncUndeserializablePayloadIntegrationTest extends BaseAsyncSim
         // Keyed on the simulation id, exactly as SimulationEventPublisher keys real events.
         publish(poison, id);
 
+        // Drain this class's own DLT and pick out the record for this simulation by its
+        // key. "First record" is not a safe anchor: the drain may legitimately see records
+        // from earlier retries or sibling tests, and the DLT is per-class precisely so the
+        // key filter below has exactly one match to find.
         List<ConsumerRecord<String, byte[]>> dlt =
-                AsyncKafkaTestSupport.drainDlt(DLT_WAIT, 1);
+                AsyncKafkaTestSupport.drainDlt(DLT_WAIT, 1, "t4a-undeserializable");
 
-        assertFalse(dlt.isEmpty(),
-                () -> "no record reached " + AsyncKafkaTestSupport.DLT_TOPIC + " within " + DLT_WAIT
+        ConsumerRecord<String, byte[]> deadLettered = dlt.stream()
+                .filter(r -> id.toString().equals(r.key()))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(deadLettered,
+                () -> "no dead-letter record for simulation id " + id + " reached "
+                        + AsyncKafkaTestSupport.dltTopicFor("t4a-undeserializable") + " within " + DLT_WAIT
                         + ". An undeserialisable payload must be recoverable from the DLT. On "
                         + "master nothing is published at all: DefaultErrorHandler refuses a bare "
                         + "SerializationException, the container never seeks past the record, and "
                         + "the partition is left blocked at that offset. " + describe(id, dlt));
 
-        ConsumerRecord<String, byte[]> first = dlt.get(0);
-        assertEquals(id.toString(), first.key(),
+        assertEquals(id.toString(), deadLettered.key(),
                 () -> "the DLT record must stay keyed on the simulation id so the row can be "
                         + "resolved from the key alone. " + describe(id, dlt));
 
-        String deadLettered = new String(first.value(), StandardCharsets.UTF_8);
-        assertTrue(deadLettered.contains("UntrustedSimulationPayload") || deadLettered.contains(poison.note()),
+        String deadLetteredBody = new String(deadLettered.value(), StandardCharsets.UTF_8);
+        assertTrue(deadLetteredBody.contains("UntrustedSimulationPayload") || deadLetteredBody.contains(poison.note()),
                 () -> "the DLT must carry the original payload bytes, not a re-serialised "
-                        + "placeholder or a bare exception. Saw: " + deadLettered);
+                        + "placeholder or a bare exception. Saw: " + deadLetteredBody);
 
         Simulation row = simulationRepository.findById(id).orElseThrow();
         assertEquals(SimulationStatus.FAILED, row.getStatus(),

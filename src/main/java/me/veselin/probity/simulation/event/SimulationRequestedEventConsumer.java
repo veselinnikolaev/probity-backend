@@ -50,7 +50,7 @@ public class SimulationRequestedEventConsumer {
     private final SimulationProperties simulationProperties;
 
     @KafkaListener(
-            topics = "simulation-requested",
+            topics = "${probity.kafka.simulation-requested-topic:simulation-requested}",
             groupId = "${probity.simulation.consumer-group:probity-simulation-worker}",
             containerFactory = "kafkaListenerContainerFactory"
     )

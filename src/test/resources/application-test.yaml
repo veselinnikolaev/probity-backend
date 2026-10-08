@@ -39,3 +39,7 @@ logging:
     io.lettuce.core: WARN
     io.lettuce.core.protocol: WARN
     org.springframework.context.annotation: DEBUG
+    # Consumes a few thousand lines; needed to see the listener container's
+    # consumer/fetcher activity (e.g. whether the ErrorHandlingDeserializer
+    # chain is what actually deserialises records in the async slice).
+    org.springframework.kafka: DEBUG

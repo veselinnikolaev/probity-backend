@@ -8,7 +8,6 @@ import me.veselin.probity.simulation.persistence.SimulationRepository;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.springframework.kafka.listener.ConsumerRecordRecoverer;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
@@ -120,7 +119,12 @@ public final class SimulationFailedRecordRecoverer implements ConsumerRecordReco
         }
         RecordHeaders target = new RecordHeaders();
         for (Header h : source) {
-            target.add(new RecordHeader(h.key(), h.value()));
+            // Keep the original instances: the ErrorHandlingDeserializer records the failed
+            // payload in a package-private DeserializationExceptionHeader, and the
+            // DeadLetterPublishingRecoverer refuses to read it back if it is rebuilt as a
+            // plain RecordHeader ("Foreign deserialization exception header ... ignored;
+            // possible attack?"), which would publish a null-value DLT record.
+            target.add(h);
         }
         return target;
     }

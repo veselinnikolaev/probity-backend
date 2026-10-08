@@ -23,6 +23,7 @@ import me.veselin.probity.simulation.domain.SimulationStatus;
 import me.veselin.probity.simulation.dto.SimulationData;
 import me.veselin.probity.portfolio.service.portfolio.PortfolioValuationService;
 import me.veselin.probity.simulation.exception.EmptyPortfolioException;
+import me.veselin.probity.simulation.exception.InsufficientMarketDataException;
 import me.veselin.probity.simulation.exception.SimulationClaimLostException;
 import me.veselin.probity.simulation.exception.SimulationNotFoundException;
 import me.veselin.probity.simulation.mapper.SimulationMapper;
@@ -446,6 +447,16 @@ public class MonteCarloSimulationService {
                 portfolioReturns.size(),
                 portfolioReturns.stream().limit(5).toList());
 
+        if (portfolioReturns.isEmpty()) {
+            // Previously this fell back to default volatility and a zero return, which let a
+            // run proceed on garbage parameters and, when the risk engine could not answer,
+            // NPE inside computeStatistics. Fail loudly instead: the caller asked for
+            // market-data-derived parameters and there is nothing to derive them from.
+            throw new InsufficientMarketDataException(
+                    "Insufficient market data for tickers %s — cannot derive simulation parameters"
+                            .formatted(barsByTicker.keySet()));
+        }
+
         double annualVol = portfolioReturns.size() >= 2
                 ? riskPort.annualisedVolatility(portfolioReturns) / 100.0  // convert % → decimal
                 : tradingConfig.getDefaultAnnualVolatility();
@@ -496,10 +507,21 @@ public class MonteCarloSimulationService {
     // ── Statistics ────────────────────────────────────────────────────────
 
     private Statistics computeStatistics(double[] sorted) {
+        if (sorted == null || sorted.length == 0) {
+            throw new InsufficientMarketDataException(
+                    "Cannot compute statistics from an empty simulated value series");
+        }
         // RiskPort.distributionStatistics uses Welford's algorithm (numerically
         // stable single-pass) and correctly handles even-N median.
         DistributionStatistics ds =
                 riskPort.distributionStatistics(sorted);
+
+        if (ds == null) {
+            // Replaces the NPE this call used to raise when the risk engine could not
+            // produce distribution statistics for the simulated values.
+            throw new InsufficientMarketDataException(
+                    "Risk engine returned no distribution statistics for the simulated values");
+        }
 
         return new Statistics(
                 ds.mean(),

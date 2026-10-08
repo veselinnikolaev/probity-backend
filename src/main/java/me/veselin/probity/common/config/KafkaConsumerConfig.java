@@ -9,6 +9,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -35,6 +36,19 @@ import java.util.Map;
 public class KafkaConsumerConfig {
 
     private static final int MAX_RETRIES = 2; // retries after the first attempt; total attempts = MAX_RETRIES + 1
+
+    /**
+     * Source and dead-letter topics for simulation-requested events.
+     *
+     * <p>Read as top-level {@code probity.kafka.*} properties (same source {@link KafkaConfig}
+     * uses for the {@code NewTopic} beans), not {@code spring.kafka.properties.*} — the
+     * recoverer must map the exact topic the listener consumes from and the publisher sends to.
+     */
+    @Value("${probity.kafka.simulation-requested-topic:simulation-requested}")
+    private String simulationRequestedTopic;
+
+    @Value("${probity.kafka.simulation-requested-dlt-topic:simulation-requested.DLT}")
+    private String simulationRequestedDltTopic;
 
     @Bean
     @Primary
@@ -97,6 +111,7 @@ public class KafkaConsumerConfig {
 
         errorHandler.addNotRetryableExceptions(
                 me.veselin.probity.simulation.exception.EmptyPortfolioException.class,
+                me.veselin.probity.simulation.exception.InsufficientMarketDataException.class,
                 me.veselin.probity.portfolio.exception.PortfolioNotFoundException.class,
                 me.veselin.probity.portfolio.exception.PositionNotFoundException.class,
                 me.veselin.probity.portfolio.exception.AssetNotFoundException.class,
@@ -110,14 +125,9 @@ public class KafkaConsumerConfig {
 
     @Bean
     public DeadLetterPublishingRecoverer deadLetterPublishingRecoverer(
-            KafkaTemplate<Object, byte[]> deadLetterKafkaTemplate,
-            KafkaProperties kafkaProperties) {
+            KafkaTemplate<Object, byte[]> deadLetterKafkaTemplate) {
         Map<String, String> dltTopics = new HashMap<>();
-        String dltTopic = kafkaProperties.getProperties().getOrDefault("probity.kafka.simulation-requested-dlt-topic",
-                "simulation-requested.DLT");
-        String sourceTopic = kafkaProperties.getProperties().getOrDefault("probity.kafka.simulation-requested-topic",
-                "simulation-requested");
-        dltTopics.put(sourceTopic, dltTopic);
+        dltTopics.put(simulationRequestedTopic, simulationRequestedDltTopic);
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(deadLetterKafkaTemplate, (r, e) -> {
             String target = dltTopics.get(r.topic());
             if (target == null) {
