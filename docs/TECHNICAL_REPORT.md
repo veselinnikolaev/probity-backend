@@ -1,7 +1,7 @@
 # Probity Technical System Report
 
-**Version**: 1.0  
-**Date**: June 4, 2026  
+**Version**: 1.1  
+**Date**: October 8, 2026  
 **Status**: Production Ready
 
 ---
@@ -11,14 +11,14 @@
 Probity is a high-performance fintech portfolio risk management platform that delivers sub-second Monte Carlo simulation results for 10,000+ path runs while maintaining clean architectural boundaries. The system leverages Java 21 virtual threads, hexagonal architecture, and mathematical rigor to provide real-time portfolio risk assessment with concurrent processing capabilities.
 
 **Key Achievements:**
-- 337/337 passing tests (pass rate, not code coverage — no coverage tooling is configured; see §6.1)
+- 354/354 passing tests (pass rate, not code coverage — no coverage tooling is configured; see §6.1)
 - Sub-second simulation execution for 10,000+ GBM paths
 - Clean hexagonal architecture with explicit domain boundaries
 - Production-ready security with timing-attack mitigation
 - Optimized memory usage through primitive array structures
 - AI-powered portfolio analyst with Spring AI integration
 - Comprehensive user settings and session management
-- **Async simulation execution via Kafka with claim-for-processing**
+- **Async simulation execution via Kafka with claim-for-processing, bounded retry, and dead-letter handling — verified end to end by Testcontainers-backed tests**
 
 ---
 
@@ -256,6 +256,10 @@ POST /simulations/run-async  →  202 Accepted + Location header
   - `SynchronousDomainEventPublisher` (in-process Spring listeners) for all events
   - `SimulationEventPublisher` (Kafka) for `SimulationRequestedEvent` only
 - **List endpoint**: Returns only `COMPLETED` rows, ordered by `createdAt DESC`
+- **Bounded retry + DLT**: `ExponentialBackOffWithMaxRetries(2)` (1s, ×2) — up to 3 total attempts — then the record is dead-lettered instead of wedging the partition (`DefaultErrorHandler` + `DeadLetterPublishingRecoverer`)
+- **Row marked FAILED from the key**: `SimulationFailedRecordRecoverer` runs a conditional `UPDATE ... WHERE id = :key AND status = 'PENDING'` before delegating to the recoverer, so the row is failed even when the payload cannot be deserialised; header instances are preserved so the DLT record carries the original bytes
+- **Non-retryable set**: `EmptyPortfolioException`, `InsufficientMarketDataException`, `PortfolioNotFoundException`, `PositionNotFoundException`, `AssetNotFoundException`, `SimulationNotFoundException`, `AccessDeniedException`, `IllegalArgumentException`
+- **`InsufficientMarketDataException`**: empty market data fails fast with a dedicated exception (no NPE) at both parameter derivation and statistics computation
 
 **Endpoints:**
 | Endpoint | Method | Description |
@@ -627,30 +631,55 @@ return sum / cutoff;
 > coverage percentage. The corrected figures are below. Verified by
 > `mvnw clean verify` on JDK 21.
 
+> **Update (2026-10-08).** The async coverage gap in §6.1.1 is closed. The figures below
+> were re-verified with a fresh solo `mvnw clean verify` on JDK 21 (354/354,
+> 0 failures/errors/skips). The 2026-10-05 correction remains valid for everything it
+> states about coverage tooling: no JaCoCo/Cobertura is configured, so no percentage is claimed.
+
 **Test Suite Statistics:**
-- Total tests: 337 (pass rate 100%)
-- Test classes: 30 (`src/test/java`), of which 18 are `*IntegrationTest`
-- Integration tests: 18 classes (test-method split by category not tracked; no coverage report exists)
-- Async consumer tests: **0**
+- Total tests: 354 (pass rate 100%)
+- Test classes executed: 35 (`target/surefire-reports` holds one result file per executed class), of which 21 are `*IntegrationTest`
+- Async simulation pipeline: 6 classes / 7 methods in `me.veselin.probity.simulation.async` — 5 Testcontainers-Kafka classes plus 2 broker-free request-contract tests — and a standalone `InsufficientMarketDataExceptionTest`
+- Failsafe: runs nothing — every `*IntegrationTest` class ends in `Test` and executes under surefire
 - Code coverage percentage: **not measured** (no coverage plugin configured)
-- Test execution time: ~35 seconds
+- Test execution time: a full `clean verify` takes several minutes; the async slice dominates
 
-### 6.1.1 Known Coverage Gap: the async simulation path is untested
+### 6.1.1 Resolved: the async simulation pipeline is now covered end to end (2026-10-08)
 
-**Every `POST /simulations/run-async` request is currently unverified end to end.**
-No test references `SimulationRequestedEventConsumer`, `claimForProcessing`,
-`executeAsync`, or the run-async endpoint, and `application-test.yaml` configures no
-Kafka broker. The following are **untested**:
+The gap documented above was closed by the Phase 3.5 (PR-A) remediation on the
+`pr-a-red-tests` branch. The async slice lives in `me.veselin.probity.simulation.async` and runs
+its Kafka-backed classes against a Testcontainers Kafka broker with **per-class source/DLT topics**
+(`simulation-requested-<suffix>` / `simulation-requested.DLT-<suffix>`) and per-class consumer
+groups, eliminating cross-class event replay. The value deserializer is wrapped in an
+`ErrorHandlingDeserializer` (`JsonDeserializer` delegate) — confirmed at runtime from the
+consumer's configuration dump — so poison-payload behaviour is exercised end to end.
 
-- claim-once / execute-once semantics under duplicate or redelivered messages
-- recovery when a consumer dies mid-run (stale-claim reclaim)
-- dead-letter routing of poison payloads
-- retry behaviour on transient failure
-- the `202 Accepted` + `Location` contract of the async endpoint
+**What is now verified:**
 
-Consequently the async path must be treated as **unverified**, not as passing.
-Tracking issue: the Phase 3.5 remediation plan (PR-A) adds this coverage with a
-Testcontainers-backed Kafka broker.
+- **Positive control** — broker → listener → claim → execute → persist: the row reaches
+  `COMPLETED` with its result payload, and the listener reports `running=true` on partition 0 of
+  its source topic.
+- **Request contract (T1)** — `POST /simulations/run-async` returns `202 Accepted`, a `Location`
+  header addressing `/simulations/{id}/status`, and a `PENDING` row with no result; the listener
+  is deliberately dormant so the hand-off is deterministic (no broker required).
+- **Duplicate delivery (T2)** — duplicate/redelivered records are claimed and executed once.
+- **Fresh-processing reclaim (T3a)** — a run interrupted mid-processing leaves a stale `PROCESSING`
+  row that a fresh processing attempt reclaims and completes.
+- **Retry budget (T4b)** — a transient failure is retried exactly 3 times
+  (`ExponentialBackOffWithMaxRetries(2)`), then dead-lettered and the row marked `FAILED`.
+- **Poison payload (T4a)** — an undeserialisable value is dead-lettered with its **original bytes
+  intact** (asserted keyed on the simulation id), and the row is failed from the record key alone.
+
+The dead-letter machinery is generic: `SimulationFailedRecordRecoverer` marks the row `FAILED`
+via a conditional UPDATE on the record key before delegating to the
+`DeadLetterPublishingRecoverer`, and it preserves header instances so the DLT record keeps the
+original payload. Source and DLT topics are top-level configuration properties
+(`probity.kafka.simulation-requested-topic` / `probity.kafka.simulation-requested-dlt-topic`)
+shared by the publisher, the consumer, and the `NewTopic` beans.
+
+One production caveat remains: `src/main/resources/application.yaml` still configures a bare
+`JsonDeserializer`, so enabling the same `ErrorHandlingDeserializer` wrapper is a prerequisite
+for poison-payload dead-lettering outside the test slice.
 
 ### 6.2 Test Categories
 
@@ -677,6 +706,7 @@ Testcontainers-backed Kafka broker.
 **Testcontainers:**
 - PostgreSQL for integration tests
 - Redis for caching tests
+- Kafka for the async simulation pipeline (per-class source/DLT topics, per-class consumer groups)
 - Automatic cleanup between tests
 - Isolated test environments
 
@@ -888,9 +918,8 @@ Testcontainers-backed Kafka broker.
 - Remove framework annotations from domain core
 
 **Event-Driven Architecture:**
-- Introduce domain events for cross-context communication
+- A Kafka event bus is live for the simulation context (`SimulationRequestedEvent` → consumer → bounded retry → DLT); extend domain events to the remaining bounded contexts (portfolio, auth, asset)
 - Implement event sourcing for audit trail
-- Add message queue for async processing
 
 ### 8.2 Performance Enhancements
 
@@ -926,7 +955,7 @@ Probity represents a production-ready, high-performance fintech platform that su
 - **Mathematical Rigor**: Verified GBM, VaR, and correlation implementations
 - **Performance Excellence**: Sub-second simulation execution through optimized concurrency
 - **Security Hardening**: Comprehensive authentication, authorization, and rate limiting
-- **Test Coverage**: 100% passing test suite with comprehensive integration testing
+- **Test Coverage**: 100% passing test suite (354/354) including end-to-end coverage of the async Kafka pipeline
 - **AI Integration**: Spring AI-powered portfolio analyst with tool calling
 - **User Experience**: Comprehensive settings, session management, and email verification
 

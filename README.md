@@ -79,7 +79,8 @@ Probity solves the challenge of real-time portfolio risk assessment by combining
 - **Dedicated Thread Pools**: CPU-bound simulations use custom `ThreadPoolTaskExecutor` with `CallerRunsPolicy`
 - **PostgreSQL**: System of record with JSONB for simulation payloads
 - **Redis**: Caching, session management, rate limiting, chat memory persistence, and idempotency key storage
-- **Testcontainers**: Integration testing with real PostgreSQL and Redis
+- **Apache Kafka**: Event-driven async simulation pipeline with bounded retry and dead-letter handling
+- **Testcontainers**: Integration testing with real PostgreSQL, Redis, and Kafka
 - **Flyway**: Database schema migration management
 - **Micrometer & Prometheus**: Application metrics and monitoring
 - **SendGrid**: Email service for verification and notifications
@@ -105,7 +106,7 @@ Near-linear scalability with CPU cores and zero GC pauses due to primitive `doub
 | Portfolio Valuation | 92% | 3ms | 80ms |
 | Risk Calculations | 78% | 1ms | 45ms |
 
-**Test suite**: 337/337 passing tests with comprehensive coverage.
+**Test suite**: 354/354 passing tests (`./mvnw -o clean verify`), including end-to-end coverage of the async Kafka simulation pipeline.
 
 ## Mathematical Foundations
 
@@ -333,6 +334,35 @@ POST /simulations/run-async  →  202 Accepted + Location header
   - `SynchronousDomainEventPublisher` (in-process Spring listeners) for all events
   - `SimulationEventPublisher` (Kafka) for `SimulationRequestedEvent` only
 - **List endpoint**: Returns only `COMPLETED` rows, ordered by `createdAt DESC`
+
+### Reliability & Error Handling
+
+- **Bounded retry + dead-letter**: the worker listener runs `ExponentialBackOffWithMaxRetries(2)`
+  (initial 1s, ×2 multiplier) — up to 3 total attempts — then the record is dead-lettered to
+  `simulation-requested.DLT` instead of wedging the partition.
+- **Row marked FAILED from the key**: `SimulationFailedRecordRecoverer` first runs a conditional
+  `UPDATE ... SET status = 'FAILED' WHERE id = :key AND status = 'PENDING'`, so the row is failed
+  even when its payload cannot be read; it then delegates to the `DeadLetterPublishingRecoverer`
+  with the original headers preserved, so the DLT record carries the original bytes.
+- **Non-retryable failures**: `EmptyPortfolioException`, `InsufficientMarketDataException`,
+  `PortfolioNotFoundException`, `PositionNotFoundException`, `AssetNotFoundException`,
+  `SimulationNotFoundException`, `AccessDeniedException`, and `IllegalArgumentException` skip
+  retries and go straight to the DLT.
+- **`InsufficientMarketDataException`**: a simulation whose portfolio has no price bars fails with
+  a dedicated exception (never an NPE) both when deriving GBM parameters and when computing
+  statistics.
+
+### Testing the Async Pipeline
+
+The async slice runs against Testcontainers Kafka (plus the shared Postgres/Redis containers).
+Each test class owns its source and DLT topics (`simulation-requested-<suffix>` and
+`simulation-requested.DLT-<suffix>`) plus its own consumer group, so no test can replay another
+class's events; the value deserializer is wrapped in an `ErrorHandlingDeserializer`
+(`JsonDeserializer` delegate) so poison-payload behaviour is exercised end to end. Coverage
+includes: the request contract (`202` + `Location`, PENDING hand-off), a positive control through
+`COMPLETED` with a result, claim-once under duplicate delivery, stale-claim reclaim after an
+interrupted worker, the bounded retry budget, and poison-payload dead-lettering with the original
+bytes intact and the row marked `FAILED`.
 
 ### Endpoints
 
